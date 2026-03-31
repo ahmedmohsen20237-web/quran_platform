@@ -1483,3 +1483,15 @@ function init() {
 }
 
 init();
+window.deleteUser = async function(uid) {
+  if (confirm("هل أنت متأكد من حذف هذا الحساب نهائياً؟")) {
+    try {
+      const { doc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+      await deleteDoc(doc(db, "users", uid));
+      alert("تم الحذف بنجاح");
+      location.reload();
+    } catch (e) {
+      alert("خطأ: " + e.message);
+    }
+  }
+};
