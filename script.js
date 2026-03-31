@@ -1482,16 +1482,46 @@ function init() {
   navigate("home");
 }
 
-init();
+// --- كود الإدارة المصلح بالكامل ---
+
+async function renderAdminTeachers(container) {
+  const teachers = await fetchAllUsers("teacher");
+  container.innerHTML = `
+    <div class="section-header"><div class="section-title">${t("teacher_approvals")}</div></div>
+    <div class="table-wrap"><table class="data-table">
+      <thead><tr><th>${t("name")}</th><th>${t("email_col")}</th><th>${t("joined")}</th><th>${t("status")}</th><th>${t("actions")}</th></tr></thead>
+      <tbody>
+        ${teachers.length ? teachers.map(u => `
+          <tr>
+            <td class="fw-500">${u.name}</td>
+            <td class="text-muted text-sm">${u.email}</td>
+            <td class="text-muted text-sm">${u.createdAt?.toDate?.()?.toLocaleDateString() || ""}</td>
+            <td><span class="badge ${u.status === "active" ? "badge-active" : u.status === "pending" ? "badge-pending" : "badge-rejected"}">${u.status}</span></td>
+            <td>
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                ${u.status === "pending" ? `
+                  <button class="btn btn-primary btn-sm" onclick="adminApproveTeacher('${u.uid || u.id}','active')">${t("approve")}</button>
+                  <button class="btn btn-danger btn-sm" onclick="adminApproveTeacher('${u.uid || u.id}','rejected')">${t("reject")}</button>
+                ` : ""}
+                <button class="btn btn-danger btn-sm" style="background:#ff4d4d; border:none; color:white; padding:4px 8px; border-radius:4px; cursor:pointer;" onclick="deleteUser('${u.uid || u.id}')">حذف نهائي</button>
+              </div>
+            </td>
+          </tr>`).join("")
+        : `<tr><td colspan="5" style="text-align:center; padding:2rem;">${t("no_data")}</td></tr>`}
+      </tbody>
+    </table></div>`;
+}
+
+// دالة الحذف (تأكد أنها في سطر جديد ومستقل)
 window.deleteUser = async function(uid) {
-  if (confirm("هل أنت متأكد من حذف هذا الحساب نهائياً؟")) {
-    try {
-      const { doc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
-      await deleteDoc(doc(db, "users", uid));
-      alert("تم الحذف بنجاح");
-      location.reload();
-    } catch (e) {
-      alert("خطأ: " + e.message);
+    if (confirm("هل أنت متأكد من حذف هذا الحساب نهائياً؟")) {
+        try {
+            const { doc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+            await deleteDoc(doc(window.db, "users", uid));
+            alert("تم الحذف بنجاح");
+            location.reload(); 
+        } catch (e) {
+            alert("خطأ: " + e.message);
+        }
     }
-  }
 };
