@@ -32,7 +32,7 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 
 /* ═══════════════════════════════════════════════════════════════
-   i18n — TRANSLATIONS
+   i18n — TRANSLATIONS (Extended)
    ═══════════════════════════════════════════════════════════════ */
 const T = {
   en: {
@@ -56,6 +56,7 @@ const T = {
     teacher_approvals: "Teacher Approvals", users_mgmt: "Users",
     all_sessions: "All Sessions", all_bookings: "All Bookings",
     reports: "Reports", audit_log: "Audit Log",
+    offers: "Offers & Coupons",
     // Stats
     total_students: "Students", total_teachers: "Teachers",
     total_sessions: "Sessions", pending_payments: "Pending Payments",
@@ -73,6 +74,12 @@ const T = {
     bank_name: "Bank", account_name: "Account Name",
     account_no: "IBAN", amount: "Amount",
     confirm_book: "Confirm Booking", cancel: "Cancel",
+    promo_code: "Promo Code", apply_promo: "Apply", discount: "Discount",
+    payment_method: "Payment Method",
+    // Payment Methods
+    payment_bank: "Bank Transfer (IBAN)",
+    payment_vodafone: "Vodafone Cash",
+    payment_paypal: "PayPal",
     // Upload modal
     upload_title: "Upload Payment Receipt",
     amount_paid: "Amount Transferred (SAR)",
@@ -93,9 +100,19 @@ const T = {
     price: "Price (SAR)", description: "Description",
     create_session: "+ New Session", edit_session: "Edit",
     save: "Save", update: "Update",
-    delete_user: "Delete User",
+    delete_user: "Delete User", edit_user: "Edit User",
     delete_confirm: "Are you sure you want to delete this user? This action cannot be undone.",
     user_deleted: "User deleted successfully.",
+    user_updated: "User updated successfully.",
+    // Offers
+    create_offer: "+ New Offer",
+    offer_code: "Offer Code", offer_discount: "Discount (%)",
+    offer_start: "Start Date", offer_end: "End Date",
+    offer_active: "Active", offer_inactive: "Inactive",
+    offer_created: "Offer created successfully!",
+    offer_deleted: "Offer deleted successfully!",
+    invalid_code: "Invalid or expired promo code.",
+    discount_applied: "Discount applied!",
     // Messages
     booked_success: "Session booked! Please upload your payment receipt.",
     upload_success: "Receipt submitted. Waiting for admin review.",
@@ -132,6 +149,7 @@ const T = {
     teacher_approvals: "موافقات المعلمين", users_mgmt: "المستخدمون",
     all_sessions: "جميع الجلسات", all_bookings: "جميع الحجوزات",
     reports: "التقارير", audit_log: "سجل المراقبة",
+    offers: "العروض والكوبونات",
     total_students: "الطلاب", total_teachers: "المعلمون",
     total_sessions: "الجلسات", pending_payments: "مدفوعات معلقة",
     total_bookings: "الحجوزات", revenue: "الإيرادات (ر.س)",
@@ -146,6 +164,11 @@ const T = {
     bank_name: "البنك", account_name: "اسم الحساب",
     account_no: "رقم الآيبان", amount: "المبلغ",
     confirm_book: "تأكيد الحجز", cancel: "إلغاء",
+    promo_code: "كود الخصم", apply_promo: "تطبيق", discount: "الخصم",
+    payment_method: "طريقة الدفع",
+    payment_bank: "تحويل بنكي (آيبان)",
+    payment_vodafone: "فودافون كاش",
+    payment_paypal: "باي بال",
     upload_title: "رفع إيصال الدفع",
     amount_paid: "المبلغ المحوّل (ر.س)",
     receipt_file: "الإيصال (صورة أو PDF)",
@@ -164,9 +187,18 @@ const T = {
     price: "السعر (ر.س)", description: "الوصف",
     create_session: "+ جلسة جديدة", edit_session: "تعديل",
     save: "حفظ", update: "تحديث",
-    delete_user: "حذف المستخدم",
+    delete_user: "حذف المستخدم", edit_user: "تعديل المستخدم",
     delete_confirm: "هل أنت متأكد من حذف هذا المستخدم؟ لا يمكن التراجع عن هذا الإجراء.",
     user_deleted: "تم حذف المستخدم بنجاح.",
+    user_updated: "تم تحديث المستخدم بنجاح.",
+    create_offer: "+ عرض جديد",
+    offer_code: "كود العرض", offer_discount: "نسبة الخصم (%)",
+    offer_start: "تاريخ البداية", offer_end: "تاريخ النهاية",
+    offer_active: "نشط", offer_inactive: "غير نشط",
+    offer_created: "تم إنشاء العرض بنجاح!",
+    offer_deleted: "تم حذف العرض بنجاح!",
+    invalid_code: "كود خصم غير صالح أو منتهي الصلاحية.",
+    discount_applied: "تم تطبيق الخصم!",
     booked_success: "تم الحجز! يرجى رفع إيصال الدفع.",
     upload_success: "تم إرسال الإيصال. في انتظار مراجعة المدير.",
     approved_msg: "✅ تمت الموافقة على الدفع. يمكنك الآن دخول الحلقة.",
@@ -191,10 +223,11 @@ const T = {
    STATE
    ═══════════════════════════════════════════════════════════════ */
 let currentLang = localStorage.getItem("lang") || "en";
-let currentUser = null;       // Firebase user
-let userProfile = null;       // Firestore profile
+let currentUser = null;
+let userProfile = null;
 let currentPage = "home";
-let unsubListeners = [];      // Firestore snapshot listeners to clean up
+let unsubListeners = [];
+let appliedPromo = null; // Store applied promo code info
 
 const t = (key) => T[currentLang][key] || key;
 
@@ -204,6 +237,7 @@ const t = (key) => T[currentLang][key] || key;
 function showToast(msg, type = "info", duration = 4000) {
   const icons = { success: "✅", error: "❌", info: "ℹ️", warning: "⚠️" };
   const container = document.getElementById("toast-container");
+  if (!container) return;
   const el = document.createElement("div");
   el.className = `toast ${type}`;
   el.innerHTML = `<span class="toast-icon">${icons[type]}</span><span class="toast-msg">${msg}</span>`;
@@ -224,7 +258,6 @@ function setLang(lang) {
   document.documentElement.lang = lang;
   document.documentElement.dir  = lang === "ar" ? "rtl" : "ltr";
   document.querySelectorAll(".lang-btn").forEach(b => b.classList.toggle("active", b.dataset.lang === lang));
-  // Re-render current page content
   renderCurrentPage();
 }
 
@@ -281,7 +314,7 @@ function goToDash() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   AUTH
+   AUTH (Keep existing implementation)
    ═══════════════════════════════════════════════════════════════ */
 async function handleRegister(e) {
   e.preventDefault();
@@ -308,7 +341,6 @@ async function handleRegister(e) {
       createdAt: serverTimestamp(), avatar: name[0].toUpperCase()
     });
     showToast(role === "teacher" ? t("teacher_note") : "Account created! Signing you in…", "success");
-    // Auth listener will redirect
   } catch (err) {
     errEl.textContent = err.message; errEl.classList.remove("hidden");
     btn.disabled = false; btn.textContent = t("register_btn");
@@ -327,7 +359,6 @@ async function handleLogin(e) {
 
   try {
     await signInWithEmailAndPassword(auth, email, password);
-    // Redirect handled by auth listener
   } catch (err) {
     errEl.textContent = "Invalid email or password.";
     errEl.classList.remove("hidden");
@@ -452,7 +483,6 @@ function renderLogin() {
 
 async function quickLogin(email, password) {
   try {
-    // First ensure demo users exist in Firebase
     await ensureDemoUsers();
     await signInWithEmailAndPassword(auth, email, password);
   } catch(e) {
@@ -460,7 +490,6 @@ async function quickLogin(email, password) {
   }
 }
 
-// Creates demo accounts in Firebase if they don't exist
 async function ensureDemoUsers() {
   const demos = [
     { email:"admin@quran.edu", password:"admin123", name:"Admin User", role:"admin", status:"active" },
@@ -475,7 +504,7 @@ async function ensureDemoUsers() {
         role: d.role, status: d.status, avatar: d.name[0],
         createdAt: serverTimestamp()
       });
-    } catch(e) { /* already exists — ignore */ }
+    } catch(e) { /* already exists */ }
   }
 }
 
@@ -522,22 +551,6 @@ function onRoleChange(role) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   RENDER: PUBLIC SESSIONS
-   ═══════════════════════════════════════════════════════════════ */
-async function renderPublicSessions() {
-  const el = document.getElementById("sessions-content");
-  el.innerHTML = `<div style="max-width:900px;margin:0 auto;padding:2rem 1rem">
-    <div style="text-align:center;margin-bottom:2rem">
-      <div style="font-family:var(--font-arabic);font-size:2.2rem;color:var(--gold);margin-bottom:8px">جلساتنا</div>
-      <p class="text-muted">${currentLang==="ar"?"تصفح واحجز جلسات تعلّم القرآن":"Browse and book Quran learning sessions"}</p>
-    </div>
-    <div id="pub-session-list" class="session-grid">${loadingHTML()}</div>
-  </div>`;
-  const sessions = await fetchSessions();
-  renderSessionCards(document.getElementById("pub-session-list"), sessions, null, true);
-}
-
-/* ═══════════════════════════════════════════════════════════════
    FETCH HELPERS
    ═══════════════════════════════════════════════════════════════ */
 async function fetchSessions(teacherId = null) {
@@ -564,96 +577,164 @@ async function fetchAllBookings() {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
+async function fetchAllOffers() {
+  const snap = await getDocs(collection(db,"offers"));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
 function loadingHTML() {
   return `<div style="text-align:center;padding:3rem;color:var(--gold);opacity:.6">${t("loading")}</div>`;
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   SESSION CARDS RENDERER
+   PROMO CODE VALIDATION
    ═══════════════════════════════════════════════════════════════ */
-function renderSessionCards(container, sessions, bookings, isPublic = false) {
-  if (!sessions.length) { container.innerHTML = `<p class="text-muted" style="text-align:center;padding:2rem">${t("no_data")}</p>`; return; }
-  container.innerHTML = sessions.map(s => {
-    const booking = bookings ? bookings.find(b => b.sessionId === s.id) : null;
-    const pct = Math.round((s.enrolled||0)/(s.capacity||1)*100);
-    const catColors = { Tajweed:"badge-active", Hifz:"badge-pending", Arabic:"badge-student", Tafsir:"badge-teacher" };
-    let actionHTML = "";
-    if (isPublic) {
-      actionHTML = `<button class="btn btn-primary btn-sm" onclick="navigate('register')">${t("book_now")} →</button>`;
-    } else if (booking) {
-      if (booking.paymentStatus === "approved") {
-        actionHTML = `<button class="join-btn" onclick="handleJoinSession('${s.id}')">${t("join_session")}</button>`;
-      } else if (booking.paymentStatus === "pending" || booking.paymentStatus === "receipt_uploaded") {
-        actionHTML = `<span class="badge badge-pending">${t("awaiting_approval")}</span>`;
-      } else if (booking.paymentStatus === "rejected") {
-        actionHTML = `<span class="badge badge-rejected">${t("rejected_badge")}</span>`;
-      } else {
-        actionHTML = `<button class="btn btn-gold btn-sm" onclick="openUploadModal('${s.id}','${booking.id}')">${t("upload_payment")}</button>`;
-      }
-    } else if (!isPublic) {
-      if (s.status === "completed") {
-        actionHTML = `<span class="badge badge-rejected">${t("session_completed")}</span>`;
-      } else if ((s.enrolled||0) >= (s.capacity||0)) {
-        actionHTML = `<span class="badge badge-rejected">${t("session_full")}</span>`;
-      } else {
-        actionHTML = `<button class="btn btn-primary btn-sm" onclick="openBookModal('${s.id}')">${t("book_now")}</button>`;
-      }
-    }
-    return `
-      <div class="session-card">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
-          <div style="flex:1">
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-              <span class="badge ${catColors[s.category]||"badge-upcoming"}">${s.category||""}</span>
-              <span class="badge badge-upcoming">${s.level||""}</span>
-              <span class="badge ${s.status==="active"?"badge-active":s.status==="completed"?"badge-rejected":"badge-upcoming"}">${s.status||""}</span>
-            </div>
-            <div class="session-title">${s.title}</div>
-          </div>
-          <div class="session-price">${t("price_label")} ${s.price||0}</div>
-        </div>
-        <div class="info-row" style="margin:8px 0">
-          <span>📅 ${s.date||""}</span><span>⏰ ${s.time||""}</span>
-          <span>⏱️ ${s.duration||60}min</span>
-          <span>👤 ${s.teacherName||""}</span>
-          <span>🪑 ${s.enrolled||0} ${t("enrolled_of")} ${s.capacity||0}</span>
-        </div>
-        ${s.description?`<p class="text-muted text-sm" style="margin-bottom:10px;line-height:1.6">${s.description}</p>`:""}
-        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-        <div class="session-actions">${actionHTML}</div>
-      </div>`;
-  }).join("");
+async function validatePromoCode(code, sessionPrice) {
+  const offersSnap = await getDocs(query(collection(db,"offers"), where("code","==",code.toUpperCase())));
+  if (offersSnap.empty) return null;
+  const offer = offersSnap.docs[0].data();
+  const now = new Date();
+  const startDate = offer.startDate?.toDate ? offer.startDate.toDate() : new Date(offer.startDate);
+  const endDate = offer.endDate?.toDate ? offer.endDate.toDate() : new Date(offer.endDate);
+  
+  if (!offer.active || now < startDate || now > endDate) return null;
+  
+  const discountAmount = (sessionPrice * offer.discount) / 100;
+  return {
+    code: offer.code,
+    discount: offer.discount,
+    discountedPrice: sessionPrice - discountAmount,
+    valid: true
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   BOOKING FLOW
+   BOOKING FLOW (Updated with promo code and payment methods)
    ═══════════════════════════════════════════════════════════════ */
 let _bookSessionId = null;
 let _uploadBookingId = null, _uploadSessionId = null;
 let _uploadFile = null;
+let _currentPromo = null;
+let _selectedPaymentMethod = "bank";
 
 async function openBookModal(sessionId) {
   _bookSessionId = sessionId;
+  _currentPromo = null;
+  _selectedPaymentMethod = "bank";
+  
   const snap = await getDoc(doc(db,"sessions",sessionId));
   const s = snap.data();
   const price = s.price || 0;
+  
   document.getElementById("modal-book-title").textContent = `${t("book_title")} — ${s.title}`;
   document.getElementById("modal-book-body").innerHTML = `
     <div class="glass-card-light" style="padding:1rem;margin-bottom:1rem">
       <p style="font-weight:500;margin-bottom:6px">${s.title}</p>
       <div class="info-row"><span>📅 ${s.date} ${currentLang==="ar"?"الساعة":"at"} ${s.time}</span><span>⏱️ ${s.duration}min</span></div>
     </div>
-    <div class="alert alert-info">💳 ${currentLang==="ar"?"بعد الحجز، ارفع إيصال التحويل البنكي لتأكيد مقعدك.":"After booking, upload your bank transfer proof to confirm your seat."}</div>
-    <div style="background:rgba(9,30,18,.5);padding:1rem;border-radius:var(--r-sm);font-size:13px;border:1px solid var(--border)">
-      <p style="font-weight:600;color:var(--gold-light);margin-bottom:10px">🏦 ${t("bank_details")}</p>
-      <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 14px">
-        <span class="text-muted">${t("bank_name")}:</span><span>${t("bank_name_val")}</span>
-        <span class="text-muted">${t("account_name")}:</span><span>${t("account_holder")}</span>
-        <span class="text-muted">${t("account_no")}:</span><span style="font-family:monospace">${t("bank_iban")}</span>
-        <span class="text-muted">${t("amount")}:</span><span style="color:var(--gold);font-weight:700">${t("price_label")} ${price}</span>
+    
+    <div class="form-group">
+      <label class="form-label">${t("payment_method")}</label>
+      <select id="payment-method-select" class="form-select" onchange="updatePaymentMethodDetails(this.value)">
+        <option value="bank">${t("payment_bank")}</option>
+        <option value="vodafone">${t("payment_vodafone")}</option>
+        <option value="paypal">${t("payment_paypal")}</option>
+      </select>
+    </div>
+    
+    <div id="payment-details-container">
+      ${getPaymentMethodDetailsHTML("bank", price)}
+    </div>
+    
+    <div class="form-group" style="margin-top:1rem">
+      <label class="form-label">${t("promo_code")}</label>
+      <div style="display:flex;gap:8px">
+        <input id="promo-code-input" type="text" class="form-input" placeholder="${currentLang==="ar"?"أدخل كود الخصم":"Enter promo code"}">
+        <button class="btn btn-outline btn-sm" onclick="applyPromoCode()">${t("apply_promo")}</button>
       </div>
-    </div>`;
+      <div id="promo-feedback" class="text-sm mt-1"></div>
+    </div>
+    
+    <div id="price-display" style="margin-top:1rem;padding:1rem;background:rgba(9,30,18,.3);border-radius:var(--r-sm);text-align:center">
+      <span style="font-size:14px">${t("amount")}: </span>
+      <span style="font-size:24px;font-weight:700;color:var(--gold)" id="final-price">${t("price_label")} ${price}</span>
+    </div>
+    
+    <div class="alert alert-info mt-2">💳 ${currentLang==="ar"?"بعد الحجز، ارفع إيصال التحويل البنكي لتأكيد مقعدك.":"After booking, upload your bank transfer proof to confirm your seat."}</div>`;
+  
   showModal("modal-book");
+}
+
+function getPaymentMethodDetailsHTML(method, price) {
+  const methods = {
+    bank: `
+      <div style="background:rgba(9,30,18,.5);padding:1rem;border-radius:var(--r-sm);font-size:13px;border:1px solid var(--border)">
+        <p style="font-weight:600;color:var(--gold-light);margin-bottom:10px">🏦 ${t("bank_details")}</p>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 14px">
+          <span class="text-muted">${t("bank_name")}:</span><span>${t("bank_name_val")}</span>
+          <span class="text-muted">${t("account_name")}:</span><span>${t("account_holder")}</span>
+          <span class="text-muted">${t("account_no")}:</span><span style="font-family:monospace">${t("bank_iban")}</span>
+          <span class="text-muted">${t("amount")}:</span><span style="color:var(--gold);font-weight:700">${t("price_label")} ${price}</span>
+        </div>
+      </div>`,
+    vodafone: `
+      <div style="background:rgba(9,30,18,.5);padding:1rem;border-radius:var(--r-sm);font-size:13px;border:1px solid var(--border)">
+        <p style="font-weight:600;color:var(--gold-light);margin-bottom:10px">📱 ${t("payment_vodafone")}</p>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 14px">
+          <span class="text-muted">رقم المحفظة:</span><span>0100 0000 000</span>
+          <span class="text-muted">${t("amount")}:</span><span style="color:var(--gold);font-weight:700">${t("price_label")} ${price}</span>
+        </div>
+      </div>`,
+    paypal: `
+      <div style="background:rgba(9,30,18,.5);padding:1rem;border-radius:var(--r-sm);font-size:13px;border:1px solid var(--border)">
+        <p style="font-weight:600;color:var(--gold-light);margin-bottom:10px">💰 ${t("payment_paypal")}</p>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 14px">
+          <span class="text-muted">البريد الإلكتروني:</span><span>payments@quran.edu</span>
+          <span class="text-muted">${t("amount")}:</span><span style="color:var(--gold);font-weight:700">${t("price_label")} ${price}</span>
+        </div>
+      </div>`
+  };
+  return methods[method] || methods.bank;
+}
+
+function updatePaymentMethodDetails(method) {
+  _selectedPaymentMethod = method;
+  const container = document.getElementById("payment-details-container");
+  const priceEl = document.getElementById("final-price");
+  let price = 0;
+  if (priceEl) {
+    const priceText = priceEl.textContent;
+    const match = priceText.match(/\d+(?:\.\d+)?/);
+    price = match ? parseFloat(match[0]) : 0;
+  }
+  if (container) {
+    container.innerHTML = getPaymentMethodDetailsHTML(method, price);
+  }
+}
+
+async function applyPromoCode() {
+  const codeInput = document.getElementById("promo-code-input");
+  const code = codeInput.value.trim();
+  if (!code) return;
+  
+  const snap = await getDoc(doc(db,"sessions",_bookSessionId));
+  const session = snap.data();
+  const originalPrice = session.price || 0;
+  
+  const promoResult = await validatePromoCode(code, originalPrice);
+  const feedback = document.getElementById("promo-feedback");
+  
+  if (promoResult && promoResult.valid) {
+    _currentPromo = promoResult;
+    feedback.innerHTML = `<span style="color:var(--success)">✅ ${t("discount_applied")} (${promoResult.discount}% off)</span>`;
+    document.getElementById("final-price").innerHTML = `${t("price_label")} ${promoResult.discountedPrice.toFixed(2)} <span style="font-size:12px;text-decoration:line-through;opacity:0.7">${t("price_label")} ${originalPrice}</span>`;
+    // Update payment details with discounted price
+    updatePaymentMethodDetails(_selectedPaymentMethod);
+  } else {
+    _currentPromo = null;
+    feedback.innerHTML = `<span style="color:var(--error)">❌ ${t("invalid_code")}</span>`;
+    document.getElementById("final-price").innerHTML = `${t("price_label")} ${originalPrice}`;
+  }
 }
 
 async function confirmBooking() {
@@ -664,17 +745,48 @@ async function confirmBooking() {
     const sessionRef = doc(db,"sessions",_bookSessionId);
     const sSnap = await getDoc(sessionRef);
     const s = sSnap.data();
-    if ((s.enrolled||0) >= (s.capacity||0)) { showToast(t("session_full"), "error"); closeModal("modal-book"); return; }
-    const existing = await getDocs(query(collection(db,"bookings"), where("studentId","==",currentUser.uid), where("sessionId","==",_bookSessionId)));
-    if (!existing.empty) { showToast(currentLang==="ar"?"حجزت هذه الجلسة مسبقاً":"Already booked.", "warning"); closeModal("modal-book"); return; }
+    if ((s.enrolled||0) >= (s.capacity||0)) { 
+      showToast(t("session_full"), "error"); 
+      closeModal("modal-book"); 
+      return; 
+    }
+    
+    const existing = await getDocs(query(collection(db,"bookings"), 
+      where("studentId","==",currentUser.uid), 
+      where("sessionId","==",_bookSessionId)));
+    if (!existing.empty) { 
+      showToast(currentLang==="ar"?"حجزت هذه الجلسة مسبقاً":"Already booked.", "warning"); 
+      closeModal("modal-book"); 
+      return; 
+    }
+    
+    const finalPrice = _currentPromo ? _currentPromo.discountedPrice : (s.price || 0);
+    
     const bRef = await addDoc(collection(db,"bookings"), {
-      studentId: currentUser.uid, studentName: userProfile.name,
-      sessionId: _bookSessionId, sessionTitle: s.title,
-      teacherId: s.teacherId, status: "pending", paymentStatus: "pending",
+      studentId: currentUser.uid, 
+      studentName: userProfile.name,
+      sessionId: _bookSessionId, 
+      sessionTitle: s.title,
+      teacherId: s.teacherId, 
+      status: "pending", 
+      paymentStatus: "pending",
+      paymentMethod: _selectedPaymentMethod,
+      originalPrice: s.price || 0,
+      finalPrice: finalPrice,
+      promoCode: _currentPromo ? _currentPromo.code : null,
+      promoDiscount: _currentPromo ? _currentPromo.discount : null,
       bookedAt: serverTimestamp()
     });
+    
     await updateDoc(sessionRef, { enrolled: (s.enrolled||0) + 1 });
-    await addDoc(collection(db,"audit_logs"), { userId: currentUser.uid, action: "SESSION_BOOKED", target: `Session:${_bookSessionId}`, timestamp: serverTimestamp() });
+    await addDoc(collection(db,"audit_logs"), { 
+      userId: currentUser.uid, 
+      action: "SESSION_BOOKED", 
+      target: `Session:${_bookSessionId}`,
+      details: _currentPromo ? `Promo:${_currentPromo.code}` : null,
+      timestamp: serverTimestamp() 
+    });
+    
     closeModal("modal-book");
     showToast(t("booked_success"), "success");
     openUploadModal(_bookSessionId, bRef.id);
@@ -685,7 +797,8 @@ async function confirmBooking() {
 }
 
 async function openUploadModal(sessionId, bookingId) {
-  _uploadSessionId = sessionId; _uploadBookingId = bookingId;
+  _uploadSessionId = sessionId; 
+  _uploadBookingId = bookingId;
   _uploadFile = null;
   document.getElementById("modal-upload-body").innerHTML = `
     <div id="upload-error" class="alert alert-error hidden"></div>
@@ -707,44 +820,61 @@ async function openUploadModal(sessionId, bookingId) {
   showModal("modal-upload");
 }
 
-function onDragOver(e) { e.preventDefault(); document.getElementById("upload-zone").classList.add("dragover"); }
-function onDragLeave()  { document.getElementById("upload-zone").classList.remove("dragover"); }
+function onDragOver(e) { e.preventDefault(); document.getElementById("upload-zone")?.classList.add("dragover"); }
+function onDragLeave()  { document.getElementById("upload-zone")?.classList.remove("dragover"); }
 function onDrop(e) { e.preventDefault(); onDragLeave(); if(e.dataTransfer.files[0]) setUploadFile(e.dataTransfer.files[0]); }
 function onFileSelect(e) { if(e.target.files[0]) setUploadFile(e.target.files[0]); }
 
 function setUploadFile(file) {
   _uploadFile = file;
-  document.getElementById("upload-icon").textContent = file.type==="application/pdf"?"📄":"🖼️";
-  document.getElementById("upload-title").textContent = file.name;
+  const iconEl = document.getElementById("upload-icon");
+  const titleEl = document.getElementById("upload-title");
+  if (iconEl) iconEl.textContent = file.type==="application/pdf"?"📄":"🖼️";
+  if (titleEl) titleEl.textContent = file.name;
   const prev = document.getElementById("upload-preview");
-  if (file.type.startsWith("image/")) {
-    const url = URL.createObjectURL(file);
-    prev.innerHTML = `<img src="${url}" style="max-height:90px;border-radius:6px;margin-top:8px">`;
-  } else { prev.innerHTML = ""; }
+  if (prev) {
+    if (file.type.startsWith("image/")) {
+      const url = URL.createObjectURL(file);
+      prev.innerHTML = `<img src="${url}" style="max-height:90px;border-radius:6px;margin-top:8px">`;
+    } else { prev.innerHTML = ""; }
+  }
 }
 
 async function submitPayment() {
-  if (!_uploadFile) { showToast(currentLang==="ar"?"يرجى اختيار ملف الإيصال":"Please select a receipt file.", "error"); return; }
+  if (!_uploadFile) { 
+    showToast(currentLang==="ar"?"يرجى اختيار ملف الإيصال":"Please select a receipt file.", "error"); 
+    return; 
+  }
   const btn = document.getElementById("submit-payment-btn");
   btn.disabled = true; btn.textContent = t("uploading");
   const errEl = document.getElementById("upload-error");
-  errEl.classList.add("hidden");
+  if (errEl) errEl.classList.add("hidden");
   try {
     const { url, publicId } = await uploadToCloudinary(_uploadFile);
     await updateDoc(doc(db,"bookings",_uploadBookingId), {
       paymentStatus: "receipt_uploaded",
-      receiptUrl: url, receiptPublicId: publicId,
-      amountPaid: parseFloat(document.getElementById("upload-amount").value)||0,
-      paymentNotes: document.getElementById("upload-notes").value,
+      receiptUrl: url, 
+      receiptPublicId: publicId,
+      amountPaid: parseFloat(document.getElementById("upload-amount")?.value)||0,
+      paymentNotes: document.getElementById("upload-notes")?.value,
       uploadedAt: serverTimestamp()
     });
-    await addDoc(collection(db,"audit_logs"), { userId: currentUser.uid, action: "PAYMENT_UPLOADED", target: `Booking:${_uploadBookingId}`, timestamp: serverTimestamp() });
+    await addDoc(collection(db,"audit_logs"), { 
+      userId: currentUser.uid, 
+      action: "PAYMENT_UPLOADED", 
+      target: `Booking:${_uploadBookingId}`, 
+      timestamp: serverTimestamp() 
+    });
     closeModal("modal-upload");
     showToast(t("upload_success"), "success");
     renderCurrentPage();
   } catch(e) {
-    errEl.textContent = e.message; errEl.classList.remove("hidden");
-    btn.disabled = false; btn.textContent = t("submit_payment");
+    if (errEl) {
+      errEl.textContent = e.message; 
+      errEl.classList.remove("hidden");
+    }
+    btn.disabled = false; 
+    btn.textContent = t("submit_payment");
   }
 }
 
@@ -760,13 +890,21 @@ async function handleJoinSession(sessionId) {
   if (booking.paymentStatus !== "approved") { showToast(t("join_denied"), "warning"); return; }
   const sSnap = await getDoc(doc(db,"sessions",sessionId));
   const session = sSnap.data();
-  if (!session.zoomLink) { showToast(currentLang==="ar"?"رابط الجلسة غير متاح بعد":"Session link not available yet.", "warning"); return; }
-  await addDoc(collection(db,"audit_logs"), { userId: currentUser.uid, action: "SESSION_JOIN", target: `Session:${sessionId}`, timestamp: serverTimestamp() });
+  if (!session.zoomLink) { 
+    showToast(currentLang==="ar"?"رابط الجلسة غير متاح بعد":"Session link not available yet.", "warning"); 
+    return; 
+  }
+  await addDoc(collection(db,"audit_logs"), { 
+    userId: currentUser.uid, 
+    action: "SESSION_JOIN", 
+    target: `Session:${sessionId}`, 
+    timestamp: serverTimestamp() 
+  });
   window.open(session.zoomLink, "_blank", "noopener,noreferrer");
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   STUDENT DASHBOARD
+   STUDENT DASHBOARD (Keep existing implementation)
    ═══════════════════════════════════════════════════════════════ */
 let studentTab = "overview";
 
@@ -836,7 +974,10 @@ async function renderStudentBookings(container, bookings, sessions) {
         return `<div class="glass-card-light" style="padding:1.25rem">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
             <div><p style="font-weight:500;margin-bottom:4px">${b.sessionTitle||"Session"}</p>
-              <div class="info-row"><span>📅 ${s?.date||""}</span><span>👤 ${s?.teacherName||""}</span></div></div>
+              <div class="info-row"><span>📅 ${s?.date||""}</span><span>👤 ${s?.teacherName||""}</span></div>
+              ${b.promoCode ? `<div class="text-muted text-xs mt-1">🎫 ${t("promo_code")}: ${b.promoCode} (${b.promoDiscount}%)</div>` : ""}
+              ${b.finalPrice && b.finalPrice !== b.originalPrice ? `<div class="text-muted text-xs">💰 ${t("price_label")} ${b.originalPrice} → ${b.finalPrice}</div>` : ""}
+            </div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               <span class="badge ${ps==="approved"?"badge-active":ps==="rejected"?"badge-rejected":"badge-pending"}">${ps==="approved"?t("approved_badge"):ps==="rejected"?t("rejected_badge"):t("awaiting_approval")}</span>
               ${action}
@@ -849,7 +990,7 @@ async function renderStudentBookings(container, bookings, sessions) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   TEACHER DASHBOARD
+   TEACHER DASHBOARD (Keep existing implementation)
    ═══════════════════════════════════════════════════════════════ */
 let teacherTab = "overview";
 let editingSessionId = null;
@@ -879,7 +1020,7 @@ async function renderTeacherDash(params = {}) {
 
 function renderTeacherOverview(container, sessions, bookings) {
   const enrolled  = sessions.reduce((a,s) => a+(s.enrolled||0), 0);
-  const revenue   = bookings.filter(b=>b.paymentStatus==="approved").length; // simplified
+  const revenue   = bookings.filter(b=>b.paymentStatus==="approved").length;
   container.innerHTML = `
     <div style="margin-bottom:1.5rem">
       <div style="font-family:var(--font-arabic);font-size:1.3rem;color:var(--gold);margin-bottom:4px">مرحباً، ${userProfile.name.split(" ")[0]}</div>
@@ -942,7 +1083,7 @@ async function renderTeacherStudents(container, sessions, bookings) {
   container.innerHTML = `
     <div class="section-header"><div class="section-title">${t("students")}</div></div>
     <div class="table-wrap"><table class="data-table">
-      <thead><tr><th>${t("student_name")}</th><th>${t("session_name")}</th><th>${t("uploaded_at")}</th><th>${t("status")}</th> </thead>
+      <thead><tr><th>${t("student_name")}</th><th>${t("session_name")}</th><th>${t("uploaded_at")}</th><th>${t("status")}</th></tr></thead>
       <tbody>
         ${bookings.length ? bookings.map(b => {
           const s = sessions.find(ss=>ss.id===b.sessionId);
@@ -1005,10 +1146,10 @@ async function saveSession() {
   const btn = document.getElementById("save-session-btn");
   const errEl = document.getElementById("sess-error");
   errEl.classList.add("hidden");
-  const title   = document.getElementById("sf-title").value.trim();
-  const zoom    = document.getElementById("sf-zoom").value.trim();
-  const dateVal = document.getElementById("sf-date").value;
-  const timeVal = document.getElementById("sf-time").value;
+  const title   = document.getElementById("sf-title")?.value.trim();
+  const zoom    = document.getElementById("sf-zoom")?.value.trim();
+  const dateVal = document.getElementById("sf-date")?.value;
+  const timeVal = document.getElementById("sf-time")?.value;
   if (!title || !zoom || !dateVal || !timeVal) {
     errEl.textContent = currentLang==="ar"?"يرجى ملء الحقول الإلزامية":"Please fill required fields.";
     errEl.classList.remove("hidden"); return;
@@ -1019,32 +1160,43 @@ async function saveSession() {
   }
   btn.disabled = true; btn.textContent = t("loading");
   const data = {
-    title, description: document.getElementById("sf-desc").value.trim(),
-    date: dateVal, time: timeVal,
-    duration: parseInt(document.getElementById("sf-dur").value)||60,
-    capacity: parseInt(document.getElementById("sf-cap").value)||10,
-    category: document.getElementById("sf-cat").value,
-    level: document.getElementById("sf-level").value,
-    price: parseFloat(document.getElementById("sf-price").value)||0,
-    status: document.getElementById("sf-status").value,
+    title, 
+    description: document.getElementById("sf-desc")?.value.trim() || "",
+    date: dateVal, 
+    time: timeVal,
+    duration: parseInt(document.getElementById("sf-dur")?.value)||60,
+    capacity: parseInt(document.getElementById("sf-cap")?.value)||10,
+    category: document.getElementById("sf-cat")?.value,
+    level: document.getElementById("sf-level")?.value,
+    price: parseFloat(document.getElementById("sf-price")?.value)||0,
+    status: document.getElementById("sf-status")?.value,
     zoomLink: zoom,
-    teacherId: currentUser.uid, teacherName: userProfile.name,
+    teacherId: currentUser.uid, 
+    teacherName: userProfile.name,
   };
   try {
     if (editingSessionId) {
       await updateDoc(doc(db,"sessions",editingSessionId), data);
       showToast(t("session_updated"), "success");
     } else {
-      data.enrolled = 0; data.createdAt = serverTimestamp();
+      data.enrolled = 0; 
+      data.createdAt = serverTimestamp();
       await addDoc(collection(db,"sessions"), data);
       showToast(t("session_created"), "success");
     }
-    await addDoc(collection(db,"audit_logs"), { userId: currentUser.uid, action: editingSessionId?"SESSION_UPDATED":"SESSION_CREATED", target: title, timestamp: serverTimestamp() });
+    await addDoc(collection(db,"audit_logs"), { 
+      userId: currentUser.uid, 
+      action: editingSessionId?"SESSION_UPDATED":"SESSION_CREATED", 
+      target: title, 
+      timestamp: serverTimestamp() 
+    });
     closeModal("modal-session");
     renderCurrentPage();
   } catch(e) {
-    errEl.textContent = e.message; errEl.classList.remove("hidden");
-    btn.disabled = false; btn.textContent = editingSessionId ? t("update") : t("save");
+    errEl.textContent = e.message; 
+    errEl.classList.remove("hidden");
+    btn.disabled = false; 
+    btn.textContent = editingSessionId ? t("update") : t("save");
   }
 }
 
@@ -1056,7 +1208,6 @@ let adminTab = "overview";
 async function renderAdminDash(params = {}) {
   if (params.tab) adminTab = params.tab;
   const el = document.getElementById("admin-content");
-  // Count pending items for badges
   let pendingPayments = 0, pendingTeachers = 0;
   try {
     const pSnap = await getDocs(query(collection(db,"bookings"), where("paymentStatus","==","receipt_uploaded")));
@@ -1073,6 +1224,7 @@ async function renderAdminDash(params = {}) {
       { id:"users", icon:"👥", label:t("users_mgmt") },
       { id:"allsessions", icon:"📚", label:t("all_sessions") },
       { id:"allbookings", icon:"📋", label:t("all_bookings") },
+      { id:"offers", icon:"🏷️", label:t("offers") },
       { id:"reports", icon:"📊", label:t("reports") },
       { id:"audit", icon:"🔍", label:t("audit_log") },
       { id:"notifications", icon:"🔔", label:t("notifications") },
@@ -1088,20 +1240,22 @@ async function renderAdminDash(params = {}) {
   else if (adminTab === "users")     await renderAdminUsers(contentArea);
   else if (adminTab === "allsessions") await renderAdminSessions(contentArea);
   else if (adminTab === "allbookings") await renderAdminBookings(contentArea);
+  else if (adminTab === "offers")      await renderAdminOffers(contentArea);
   else if (adminTab === "reports")   await renderAdminReports(contentArea);
   else if (adminTab === "audit")     await renderAdminAudit(contentArea);
   else if (adminTab === "notifications") renderNotifications(contentArea, currentUser.uid);
 }
 
 async function renderAdminOverview(container) {
-  const [users, sessions, bookings] = await Promise.all([fetchAllUsers(), fetchSessions(), fetchAllBookings()]);
+  const [users, sessions, bookings, offers] = await Promise.all([fetchAllUsers(), fetchSessions(), fetchAllBookings(), fetchAllOffers()]);
   const stats = {
     students: users.filter(u=>u.role==="student").length,
     teachers: users.filter(u=>u.role==="teacher"&&u.status==="active").length,
     sessions: sessions.length,
     bookings: bookings.length,
     pendingPay: bookings.filter(b=>b.paymentStatus==="receipt_uploaded").length,
-    revenue: 0,
+    offers: offers.length,
+    revenue: bookings.filter(b=>b.paymentStatus==="approved").reduce((sum,b)=>sum+(b.finalPrice||b.originalPrice||0),0),
   };
   container.innerHTML = `
     <div style="margin-bottom:1.5rem">
@@ -1116,6 +1270,7 @@ async function renderAdminOverview(container) {
         { label:t("total_sessions"), value:stats.sessions, icon:"📚" },
         { label:t("total_bookings"), value:stats.bookings, icon:"📋" },
         { label:t("pending_payments"), value:stats.pendingPay, icon:"⏳" },
+        { label:t("revenue"), value:`${t("price_label")} ${stats.revenue.toFixed(2)}`, icon:"💰" },
       ].map(s=>`<div class="stat-card"><div class="stat-icon">${s.icon}</div><div class="stat-label">${s.label}</div><div class="stat-value">${s.value}</div></div>`).join("")}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:1rem">
@@ -1148,39 +1303,35 @@ async function renderAdminPayments(container) {
   container.innerHTML = `
     <div class="section-header">
       <div class="section-title">${t("payments")}</div>
-      <button class="btn btn-primary btn-sm" onclick="activateSubscriptionPayments()">💳 Activate Subscriptions</button>
     </div>
     <div class="table-wrap"><table class="data-table">
       <thead>
         <th>${t("student_name")}</th><th>${t("session_name")}</th>
         <th>${t("amount_paid")}</th><th>${t("view_receipt")}</th>
+        <th>${t("payment_method")}</th>
         <th>${t("uploaded_at")}</th><th>${t("status")}</th><th>${t("actions")}</th>
       </thead>
       <tbody>
         ${withReceipts.length ? withReceipts.map(b=>`
-           <tr>
-             <td><p class="fw-500">${b.studentName||""}</p></td>
+          <tr>
+              <td><p class="fw-500">${b.studentName||""}</p></td>
             <td class="text-muted">${b.sessionTitle||""}</td>
-            <td class="fw-600" style="color:var(--gold)">${t("price_label")} ${b.amountPaid||0}</td>
+            <td class="fw-600" style="color:var(--gold)">${t("price_label")} ${b.amountPaid||b.finalPrice||b.originalPrice||0}</td>
             <td>${b.receiptUrl?`<a href="${b.receiptUrl}" target="_blank" class="btn btn-outline btn-sm">🖼️ ${t("view_receipt")}</a>`:"-"}</td>
-            <td class="text-muted text-sm">${b.uploadedAt?.toDate?.()?.toLocaleDateString()||""}</td>
-            <td><span class="badge ${b.paymentStatus==="approved"?"badge-active":b.paymentStatus==="rejected"?"badge-rejected":"badge-pending"}">${b.paymentStatus||""}</span></td>
+            <td><span class="badge badge-upcoming">${b.paymentMethod||"bank"}</span></td>
+            <td class="text-muted text-sm">${b.uploadedAt?.toDate?.()?.toLocaleDateString()||b.bookedAt?.toDate?.()?.toLocaleDateString()||""}</td>
+            <td><span class="badge ${b.paymentStatus==="approved"?"badge-active":b.paymentStatus==="rejected"?"badge-rejected":"badge-pending"}">${b.paymentStatus||"pending"}</span></td>
             <td>
-              ${b.paymentStatus==="receipt_uploaded"?`
+              ${b.paymentStatus==="receipt_uploaded" || b.paymentStatus==="pending" ? `
                 <div style="display:flex;gap:6px;flex-wrap:wrap">
                   <button class="btn btn-primary btn-sm" onclick="adminApprovePayment('${b.id}','approved')">${t("approve")}</button>
                   <button class="btn btn-danger btn-sm" onclick="adminApprovePayment('${b.id}','rejected')">${t("reject")}</button>
                 </div>`:"–"}
             </td>
-          </tr>`).join("")
-        : `<tr><td colspan="7" style="text-align:center;padding:2rem;color:rgba(201,168,76,.4)">${t("no_data")}</td></tr>`}
+           </tr>`).join("")
+        : `<tr><td colspan="8" style="text-align:center;padding:2rem;color:rgba(201,168,76,.4)">${t("no_data")}</td></tr>`}
       </tbody>
     </table></div>`;
-}
-
-// Function to activate subscription payments (placeholder for subscription feature)
-function activateSubscriptionPayments() {
-  showToast(currentLang === "ar" ? "سيتم تفعيل الاشتراكات قريباً" : "Subscription payments feature coming soon", "info");
 }
 
 async function adminApprovePayment(bookingId, decision) {
@@ -1192,13 +1343,19 @@ async function adminApprovePayment(bookingId, decision) {
       reviewedAt: serverTimestamp(),
       reviewedBy: currentUser.uid
     });
-    // Notify student
     await addDoc(collection(db,"notifications"), {
-      userId: booking.studentId, type: decision==="approved"?"success":"error",
+      userId: booking.studentId, 
+      type: decision==="approved"?"success":"error",
       message: decision==="approved" ? t("approved_msg") : t("rejected_msg"),
-      read: false, createdAt: serverTimestamp()
+      read: false, 
+      createdAt: serverTimestamp()
     });
-    await addDoc(collection(db,"audit_logs"), { userId: currentUser.uid, action: `PAYMENT_${decision.toUpperCase()}`, target: `Booking:${bookingId}`, timestamp: serverTimestamp() });
+    await addDoc(collection(db,"audit_logs"), { 
+      userId: currentUser.uid, 
+      action: `PAYMENT_${decision.toUpperCase()}`, 
+      target: `Booking:${bookingId}`, 
+      timestamp: serverTimestamp() 
+    });
     showToast(decision==="approved" ? t("approved_msg") : t("rejected_msg"), decision==="approved"?"success":"info");
     switchAdminTab("payments");
   } catch(e) { showToast(e.message, "error"); }
@@ -1229,6 +1386,7 @@ async function renderAdminTeachers(container) {
                   <button class="btn btn-primary btn-sm" onclick="adminApproveTeacher('${u.uid||u.id}','active')">${t("approve")}</button>
                   <button class="btn btn-danger btn-sm" onclick="adminApproveTeacher('${u.uid||u.id}','rejected')">${t("reject")}</button>
                 ` : ""}
+                <button class="btn btn-primary btn-sm" onclick="editUser('${u.uid||u.id}')">✏️ ${t("edit_user")}</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.uid||u.id}')">🗑️ ${t("delete_user")}</button>
               </div>
             </td>
@@ -1242,45 +1400,21 @@ async function adminApproveTeacher(uid, status) {
   try {
     await updateDoc(doc(db,"users",uid), { status });
     await addDoc(collection(db,"notifications"), {
-      userId: uid, type: status==="active"?"success":"error",
+      userId: uid, 
+      type: status==="active"?"success":"error",
       message: status==="active" ? t("teacher_approved") : t("teacher_rejected"),
-      read: false, createdAt: serverTimestamp()
+      read: false, 
+      createdAt: serverTimestamp()
     });
-    await addDoc(collection(db,"audit_logs"), { userId: currentUser.uid, action: `TEACHER_${status.toUpperCase()}`, target: `User:${uid}`, timestamp: serverTimestamp() });
+    await addDoc(collection(db,"audit_logs"), { 
+      userId: currentUser.uid, 
+      action: `TEACHER_${status.toUpperCase()}`, 
+      target: `User:${uid}`, 
+      timestamp: serverTimestamp() 
+    });
     showToast(status==="active" ? t("teacher_approved") : t("teacher_rejected"), "success");
     switchAdminTab("teachers");
   } catch(e) { showToast(e.message, "error"); }
-}
-
-// Delete user function
-async function deleteUser(userId) {
-  if (!currentUser || userProfile?.role !== "admin") {
-    showToast("Unauthorized action", "error");
-    return;
-  }
-  
-  const confirmDelete = confirm(t("delete_confirm"));
-  if (!confirmDelete) return;
-  
-  try {
-    // Delete user from Firestore
-    await deleteDoc(doc(db, "users", userId));
-    
-    // Log the action
-    await addDoc(collection(db, "audit_logs"), {
-      userId: currentUser.uid,
-      action: "USER_DELETED",
-      target: `User:${userId}`,
-      timestamp: serverTimestamp()
-    });
-    
-    showToast(t("user_deleted"), "success");
-    // Refresh the admin teachers tab
-    switchAdminTab("teachers");
-  } catch(e) {
-    console.error("Error deleting user:", e);
-    showToast(e.message || "Error deleting user", "error");
-  }
 }
 
 async function renderAdminUsers(container) {
@@ -1310,12 +1444,136 @@ async function renderAdminUsers(container) {
             <td class="text-muted text-sm">${u.createdAt?.toDate?.()?.toLocaleDateString()||""}</td>
             <td>
               ${u.uid !== currentUser?.uid ? `
-                <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.uid||u.id}')">🗑️ ${t("delete_user")}</button>
+                <div style="display:flex;gap:6px">
+                  <button class="btn btn-primary btn-sm" onclick="editUser('${u.uid||u.id}')">✏️ ${t("edit_user")}</button>
+                  <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.uid||u.id}')">🗑️ ${t("delete_user")}</button>
+                </div>
               ` : "<span class=\"text-muted text-sm\">Current</span>"}
             </td>
           </tr>`).join("")}
       </tbody>
     </table></div>`;
+}
+
+// Edit User Modal
+async function editUser(userId) {
+  const userSnap = await getDoc(doc(db, "users", userId));
+  if (!userSnap.exists()) return;
+  const user = userSnap.data();
+  
+  document.getElementById("modal-session-title").textContent = `${t("edit_user")}: ${user.name}`;
+  document.getElementById("modal-session-body").innerHTML = `
+    <div id="edit-user-error" class="alert alert-error hidden"></div>
+    <div class="form-group">
+      <label class="form-label">${t("name")}</label>
+      <input id="edit-user-name" type="text" class="form-input" value="${user.name}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">${t("email_col")}</label>
+      <input id="edit-user-email" type="email" class="form-input" value="${user.email}" readonly disabled>
+    </div>
+    <div class="form-group">
+      <label class="form-label">${t("role_col")}</label>
+      <select id="edit-user-role" class="form-select">
+        <option value="student" ${user.role==="student"?"selected":""}>${t("student")}</option>
+        <option value="teacher" ${user.role==="teacher"?"selected":""}>${t("teacher")}</option>
+        <option value="admin" ${user.role==="admin"?"selected":""}>${t("admin")}</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">${t("status")}</label>
+      <select id="edit-user-status" class="form-select">
+        <option value="active" ${user.status==="active"?"selected":""}>Active</option>
+        <option value="pending" ${user.status==="pending"?"selected":""}>Pending</option>
+        <option value="rejected" ${user.status==="rejected"?"selected":""}>Rejected</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem">
+      <button class="btn btn-outline" onclick="closeModal('modal-session')">${t("cancel")}</button>
+      <button class="btn btn-primary" onclick="saveUserEdit('${userId}')">${t("save")}</button>
+    </div>
+  `;
+  showModal("modal-session");
+}
+
+async function saveUserEdit(userId) {
+  const name = document.getElementById("edit-user-name")?.value.trim();
+  const role = document.getElementById("edit-user-role")?.value;
+  const status = document.getElementById("edit-user-status")?.value;
+  const errEl = document.getElementById("edit-user-error");
+  
+  if (!name) {
+    if (errEl) errEl.textContent = currentLang==="ar"?"الاسم مطلوب":"Name is required";
+    if (errEl) errEl.classList.remove("hidden");
+    return;
+  }
+  
+  try {
+    await updateDoc(doc(db, "users", userId), {
+      name: name,
+      role: role,
+      status: status,
+      avatar: name[0].toUpperCase(),
+      updatedAt: serverTimestamp()
+    });
+    await addDoc(collection(db,"audit_logs"), {
+      userId: currentUser.uid,
+      action: "USER_UPDATED",
+      target: `User:${userId}`,
+      timestamp: serverTimestamp()
+    });
+    showToast(t("user_updated"), "success");
+    closeModal("modal-session");
+    switchAdminTab("users");
+  } catch(e) {
+    if (errEl) {
+      errEl.textContent = e.message;
+      errEl.classList.remove("hidden");
+    }
+  }
+}
+
+// Delete User Function
+async function deleteUser(userId) {
+  if (!currentUser || userProfile?.role !== "admin") {
+    showToast("Unauthorized action", "error");
+    return;
+  }
+  
+  if (userId === currentUser.uid) {
+    showToast(currentLang==="ar"?"لا يمكنك حذف حسابك الخاص":"You cannot delete your own account", "warning");
+    return;
+  }
+  
+  const confirmDelete = confirm(t("delete_confirm"));
+  if (!confirmDelete) return;
+  
+  try {
+    // Delete user from Firestore
+    await deleteDoc(doc(db, "users", userId));
+    
+    // Also delete user's bookings? Optional - you might want to keep them
+    const userBookings = await getDocs(query(collection(db,"bookings"), where("studentId","==",userId)));
+    for (const booking of userBookings.docs) {
+      // Optional: mark as deleted or delete
+      await deleteDoc(doc(db, "bookings", booking.id));
+    }
+    
+    await addDoc(collection(db, "audit_logs"), {
+      userId: currentUser.uid,
+      action: "USER_DELETED",
+      target: `User:${userId}`,
+      timestamp: serverTimestamp()
+    });
+    
+    showToast(t("user_deleted"), "success");
+    // Refresh the admin users/teachers tab
+    if (adminTab === "teachers") switchAdminTab("teachers");
+    else if (adminTab === "users") switchAdminTab("users");
+  } catch(e) {
+    console.error("Error deleting user:", e);
+    showToast(e.message || "Error deleting user", "error");
+  }
 }
 
 async function renderAdminSessions(container) {
@@ -1353,6 +1611,7 @@ async function renderAdminBookings(container) {
       <thead>
         <th>${t("student_name")}</th>
         <th>${t("session_name")}</th>
+        <th>${t("payment_method")}</th>
         <th>${t("uploaded_at")}</th>
         <th>${t("status")}</th>
       </thead>
@@ -1361,6 +1620,7 @@ async function renderAdminBookings(container) {
           <tr>
             <td class="fw-500">${b.studentName||""}</td>
             <td class="text-muted">${b.sessionTitle||""}</td>
+            <td><span class="badge badge-upcoming">${b.paymentMethod||"bank"}</span></td>
             <td class="text-muted text-sm">${b.bookedAt?.toDate?.()?.toLocaleDateString()||""}</td>
             <td><span class="badge ${b.paymentStatus==="approved"?"badge-active":b.paymentStatus==="rejected"?"badge-rejected":"badge-pending"}">${b.paymentStatus||"pending"}</span></td>
           </tr>`).join("")}
@@ -1368,11 +1628,174 @@ async function renderAdminBookings(container) {
     </table></div>`;
 }
 
+// Offers Management
+async function renderAdminOffers(container) {
+  const offers = await fetchAllOffers();
+  container.innerHTML = `
+    <div class="section-header">
+      <div class="section-title">${t("offers")}</div>
+      <button class="btn btn-primary btn-sm" onclick="openOfferModal()">${t("create_offer")}</button>
+    </div>
+    <div class="table-wrap"><table class="data-table">
+      <thead>
+        <th>${t("offer_code")}</th>
+        <th>${t("offer_discount")}</th>
+        <th>${t("offer_start")}</th>
+        <th>${t("offer_end")}</th>
+        <th>${t("status")}</th>
+        <th>${t("actions")}</th>
+      </thead>
+      <tbody>
+        ${offers.length ? offers.map(o=>`
+          <tr>
+            <td class="fw-600" style="color:var(--gold)">${o.code}</td>
+            <td>${o.discount}%</td>
+            <td class="text-muted text-sm">${o.startDate?.toDate?.()?.toLocaleDateString()||o.startDate||""}</td>
+            <td class="text-muted text-sm">${o.endDate?.toDate?.()?.toLocaleDateString()||o.endDate||""}</td>
+            <td><span class="badge ${o.active?"badge-active":"badge-rejected"}">${o.active?t("offer_active"):t("offer_inactive")}</span></td>
+            <td>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-primary btn-sm" onclick="toggleOfferStatus('${o.id}', ${!o.active})">${o.active?t("reject"):t("approve")}</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteOffer('${o.id}')">🗑️ ${t("delete_user")}</button>
+              </div>
+            </td>
+          </tr>`).join("")
+        : `<tr><td colspan="6" style="text-align:center;padding:2rem;color:rgba(201,168,76,.4)">${t("no_data")}</td></tr>`}
+      </tbody>
+    </table></div>`;
+}
+
+async function openOfferModal(offerId = null) {
+  let offer = { code: "", discount: 10, startDate: "", endDate: "", active: true };
+  if (offerId) {
+    const snap = await getDoc(doc(db, "offers", offerId));
+    if (snap.exists()) offer = { id: snap.id, ...snap.data() };
+  }
+  
+  document.getElementById("modal-session-title").textContent = offerId ? `${t("edit_user")} ${t("offers")}` : t("create_offer");
+  document.getElementById("modal-session-body").innerHTML = `
+    <div id="offer-error" class="alert alert-error hidden"></div>
+    <div class="form-group">
+      <label class="form-label">${t("offer_code")}</label>
+      <input id="offer-code" type="text" class="form-input" value="${offer.code}" placeholder="SUMMER25" required>
+    </div>
+    <div class="form-group">
+      <label class="form-label">${t("offer_discount")} (%)</label>
+      <input id="offer-discount" type="number" class="form-input" value="${offer.discount}" min="1" max="100" required>
+    </div>
+    <div class="form-group">
+      <label class="form-label">${t("offer_start")}</label>
+      <input id="offer-start" type="date" class="form-input" value="${offer.startDate?.toDate?.()?.toISOString().split('T')[0] || offer.startDate || ''}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">${t("offer_end")}</label>
+      <input id="offer-end" type="date" class="form-input" value="${offer.endDate?.toDate?.()?.toISOString().split('T')[0] || offer.endDate || ''}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">${t("status")}</label>
+      <select id="offer-active" class="form-select">
+        <option value="true" ${offer.active?"selected":""}>${t("offer_active")}</option>
+        <option value="false" ${!offer.active?"selected":""}>${t("offer_inactive")}</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem">
+      <button class="btn btn-outline" onclick="closeModal('modal-session')">${t("cancel")}</button>
+      <button class="btn btn-primary" onclick="saveOffer(${offerId ? `'${offerId}'` : null})">${t("save")}</button>
+    </div>
+  `;
+  showModal("modal-session");
+}
+
+async function saveOffer(offerId = null) {
+  const code = document.getElementById("offer-code")?.value.trim().toUpperCase();
+  const discount = parseInt(document.getElementById("offer-discount")?.value);
+  const startDate = document.getElementById("offer-start")?.value;
+  const endDate = document.getElementById("offer-end")?.value;
+  const active = document.getElementById("offer-active")?.value === "true";
+  const errEl = document.getElementById("offer-error");
+  
+  if (!code || !discount) {
+    if (errEl) errEl.textContent = currentLang==="ar"?"يرجى ملء جميع الحقول":"Please fill all fields";
+    if (errEl) errEl.classList.remove("hidden");
+    return;
+  }
+  
+  try {
+    const offerData = {
+      code: code,
+      discount: discount,
+      startDate: startDate ? new Date(startDate) : serverTimestamp(),
+      endDate: endDate ? new Date(endDate) : new Date(Date.now() + 30*24*60*60*1000),
+      active: active,
+      updatedAt: serverTimestamp()
+    };
+    
+    if (offerId) {
+      await updateDoc(doc(db, "offers", offerId), offerData);
+      showToast(t("offer_updated") || "Offer updated successfully!", "success");
+    } else {
+      offerData.createdAt = serverTimestamp();
+      await addDoc(collection(db, "offers"), offerData);
+      showToast(t("offer_created"), "success");
+    }
+    
+    await addDoc(collection(db,"audit_logs"), {
+      userId: currentUser.uid,
+      action: offerId ? "OFFER_UPDATED" : "OFFER_CREATED",
+      target: `Code: ${code}`,
+      timestamp: serverTimestamp()
+    });
+    
+    closeModal("modal-session");
+    switchAdminTab("offers");
+  } catch(e) {
+    if (errEl) {
+      errEl.textContent = e.message;
+      errEl.classList.remove("hidden");
+    }
+  }
+}
+
+async function toggleOfferStatus(offerId, newStatus) {
+  try {
+    await updateDoc(doc(db, "offers", offerId), { active: newStatus });
+    await addDoc(collection(db,"audit_logs"), {
+      userId: currentUser.uid,
+      action: `OFFER_${newStatus ? "ACTIVATED" : "DEACTIVATED"}`,
+      target: `Offer:${offerId}`,
+      timestamp: serverTimestamp()
+    });
+    showToast(`Offer ${newStatus ? "activated" : "deactivated"}`, "success");
+    switchAdminTab("offers");
+  } catch(e) {
+    showToast(e.message, "error");
+  }
+}
+
+async function deleteOffer(offerId) {
+  if (!confirm(currentLang==="ar"?"هل أنت متأكد من حذف هذا العرض؟":"Are you sure you want to delete this offer?")) return;
+  try {
+    await deleteDoc(doc(db, "offers", offerId));
+    await addDoc(collection(db,"audit_logs"), {
+      userId: currentUser.uid,
+      action: "OFFER_DELETED",
+      target: `Offer:${offerId}`,
+      timestamp: serverTimestamp()
+    });
+    showToast(t("offer_deleted"), "success");
+    switchAdminTab("offers");
+  } catch(e) {
+    showToast(e.message, "error");
+  }
+}
+
 async function renderAdminReports(container) {
-  const [users, sessions, bookings] = await Promise.all([fetchAllUsers(), fetchSessions(), fetchAllBookings()]);
+  const [users, sessions, bookings, offers] = await Promise.all([fetchAllUsers(), fetchSessions(), fetchAllBookings(), fetchAllOffers()]);
   const catCount = {};
   sessions.forEach(s => { catCount[s.category||"Other"] = (catCount[s.category||"Other"]||0)+1; });
   const totalSess = sessions.length || 1;
+  const revenue = bookings.filter(b=>b.paymentStatus==="approved").reduce((sum,b)=>sum+(b.finalPrice||b.originalPrice||0),0);
+  
   container.innerHTML = `
     <div class="section-header"><div class="section-title">${t("reports")}</div></div>
     <div class="stats-grid" style="margin-bottom:2rem">
@@ -1383,6 +1806,8 @@ async function renderAdminReports(container) {
         { label:t("total_bookings"), value:bookings.length, icon:"📋" },
         { label:t("pending_payments"), value:bookings.filter(b=>b.paymentStatus==="receipt_uploaded").length, icon:"⏳" },
         { label:t("approved"), value:bookings.filter(b=>b.paymentStatus==="approved").length, icon:"✅" },
+        { label:t("revenue"), value:`${t("price_label")} ${revenue.toFixed(2)}`, icon:"💰" },
+        { label:t("offers"), value:offers.length, icon:"🏷️" },
       ].map(s=>`<div class="stat-card"><div class="stat-icon">${s.icon}</div><div class="stat-label">${s.label}</div><div class="stat-value">${s.value}</div></div>`).join("")}
     </div>
     <div class="section-header"><div class="section-title">${currentLang==="ar"?"الجلسات حسب الفئة":"Sessions by Category"}</div></div>
@@ -1407,159 +1832,12 @@ async function renderAdminAudit(container) {
       <thead>
         <th>${currentLang==="ar"?"الإجراء":"Action"}</th>
         <th>${currentLang==="ar"?"الهدف":"Target"}</th>
+        <th>${currentLang==="ar"?"التفاصيل":"Details"}</th>
         <th>${currentLang==="ar"?"المستخدم":"User"}</th>
         <th>${currentLang==="ar"?"التوقيت":"Timestamp"}</th>
       </thead>
       <tbody>
-        ${logs.length ? logs.slice(0,50).map(l=>`
+        ${logs.length ? logs.slice(0,100).map(l=>`
           <tr>
             <td><code style="font-size:11.5px;background:rgba(9,30,18,.5);padding:2px 8px;border-radius:4px;color:var(--emerald-light)">${l.action}</code></td>
-            <td class="text-sm">${l.target||""}</td>
-            <td class="text-muted text-sm">${l.userId?.substring(0,8)||""}…</td>
-            <td class="text-muted text-sm">${l.timestamp?.toDate?.()?.toLocaleString()||""}</td>
-          </tr>`).join("")
-        : `<tr><td colspan="4" style="text-align:center;padding:2rem;color:rgba(201,168,76,.4)">${t("no_data")}</td></tr>`}
-      </tbody>
-    </table></div>`;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   NOTIFICATIONS
-   ═══════════════════════════════════════════════════════════════ */
-async function renderNotifications(container, uid) {
-  const snap = await getDocs(query(collection(db,"notifications"), where("userId","==",uid), orderBy("createdAt","desc")));
-  const notifs = snap.docs.map(d => ({ id:d.id, ...d.data() }));
-  // Mark as read
-  notifs.forEach(async n => { if (!n.read) await updateDoc(doc(db,"notifications",n.id), { read: true }); });
-  const icons = { success:"✅", error:"❌", info:"ℹ️", warning:"⚠️" };
-  container.innerHTML = `
-    <div class="section-header"><div class="section-title">${t("notifications")}</div></div>
-    ${!notifs.length ? `<p class="text-muted" style="text-align:center;padding:3rem">${t("no_data")}</p>` :
-      `<div style="display:flex;flex-direction:column;gap:10px">
-        ${notifs.map(n=>`
-          <div class="glass-card-light" style="display:flex;gap:12px;align-items:flex-start;padding:1rem;opacity:${n.read?.1:.7}" data-notif="${n.id}">
-            <div style="font-size:20px">${icons[n.type]||"ℹ️"}</div>
-            <div>
-              <p style="font-size:14px">${n.message}</p>
-              <p class="text-muted text-xs mt-1">${n.createdAt?.toDate?.()?.toLocaleDateString()||""}</p>
-            </div>
-          </div>`).join("")}
-      </div>`}`;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   DASHBOARD LAYOUT BUILDER
-   ═══════════════════════════════════════════════════════════════ */
-function buildDashLayout(role, navSections, activeTab) {
-  const roleLabel = { admin:`👑 ${t("admin")}`, teacher:`📚 ${t("teacher")}`, student:`🎓 ${t("student")}` }[role];
-  const switchFn = { admin:"switchAdminTab", teacher:"switchTeacherTab", student:"switchStudentTab" }[role];
-
-  const navHTML = navSections.map(sec => `
-    <div class="nav-section-label">${sec.section}</div>
-    ${sec.items.map(item => `
-      <button class="nav-item ${activeTab===item.id?"active":""}" onclick="${switchFn}('${item.id}')">
-        <span class="nav-icon">${item.icon}</span>
-        ${item.label}
-        ${item.badge ? `<span class="nav-badge">${item.badge}</span>` : ""}
-      </button>`).join("")}
-  `).join("");
-
-  return `
-    <div class="dashboard-layout">
-      <aside class="sidebar" id="main-sidebar">
-        <div class="sidebar-logo">
-          <div class="sidebar-logo-icon">☾</div>
-          <div class="sidebar-logo-text">
-            <div class="name">Quran Platform</div>
-            <div class="sub">مدرسة القرآن الكريم</div>
-          </div>
-        </div>
-        <nav class="sidebar-nav">${navHTML}</nav>
-        <div class="sidebar-user">
-          <div class="sidebar-user-row">
-            <div class="user-avatar">${userProfile?.avatar||"?"}</div>
-            <div>
-              <div class="user-info-name">${userProfile?.name||""}</div>
-              <div class="user-info-email">${userProfile?.email||""}</div>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <span class="badge ${role==="admin"?"badge-admin":role==="teacher"?"badge-teacher":"badge-student"}">${roleLabel}</span>
-            <button class="btn btn-outline btn-sm" style="flex:1;justify-content:center" onclick="handleSignOut()">${t("signout")}</button>
-          </div>
-        </div>
-      </aside>
-      <div class="main-content">
-        <div class="topbar">
-          <div style="display:flex;align-items:center;gap:12px">
-            <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
-            <h1 class="topbar-title" id="topbar-title">${navSections.flatMap(s=>s.items).find(i=>i.id===activeTab)?.label||t("dashboard")}</h1>
-          </div>
-          <div class="topbar-right">
-            <div style="position:relative">
-              <button class="btn btn-outline btn-sm" onclick="goToNotifications()">🔔</button>
-            </div>
-            <div class="lang-toggle">
-              <button class="lang-btn ${currentLang==="en"?"active":""}" data-lang="en" onclick="setLang('en')">EN</button>
-              <button class="lang-btn ${currentLang==="ar"?"active":""}" data-lang="ar" onclick="setLang('ar')">AR</button>
-            </div>
-          </div>
-        </div>
-        <div class="page-content arabesque-bg" id="dash-content-area">${loadingHTML()}</div>
-      </div>
-    </div>`;
-}
-
-function goToNotifications() {
-  if (!userProfile) return;
-  if (userProfile.role==="admin") switchAdminTab("notifications");
-  else if (userProfile.role==="teacher") switchTeacherTab("notifications");
-  else switchStudentTab("notifications");
-}
-
-function switchStudentTab(tab) { studentTab = tab; renderStudentDash(); }
-function switchTeacherTab(tab) { teacherTab = tab; renderTeacherDash(); }
-function switchAdminTab(tab)   { adminTab = tab;   renderAdminDash(); }
-
-function toggleSidebar() {
-  document.getElementById("main-sidebar")?.classList.toggle("open");
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   MODAL HELPERS
-   ═══════════════════════════════════════════════════════════════ */
-function showModal(id) { document.getElementById(id)?.classList.remove("modal-overlay"); document.getElementById(id).style.display = "flex"; }
-function closeModal(id) { const el = document.getElementById(id); if(el) el.style.display = "none"; }
-// Click outside closes
-document.addEventListener("click", e => {
-  if (e.target.classList.contains("modal-overlay")) {
-    e.target.style.display = "none";
-  }
-});
-
-/* ═══════════════════════════════════════════════════════════════
-   EXPOSE TO GLOBAL SCOPE (needed for inline onclick)
-   ═══════════════════════════════════════════════════════════════ */
-Object.assign(window, {
-  navigate, setLang, goToDash, handleSignOut, handleLogin, handleRegister,
-  quickLogin, onRoleChange, openBookModal, confirmBooking,
-  openUploadModal, submitPayment, onDragOver, onDragLeave, onDrop, onFileSelect,
-  handleJoinSession, openSessionModal, saveSession,
-  adminApprovePayment, adminApproveTeacher, deleteUser, activateSubscriptionPayments,
-  switchStudentTab, switchTeacherTab, switchAdminTab,
-  goToNotifications, toggleSidebar, closeModal
-});
-
-/* ═══════════════════════════════════════════════════════════════
-   INIT
-   ═══════════════════════════════════════════════════════════════ */
-function init() {
-  // Apply saved language
-  document.body.classList.toggle("lang-ar", currentLang === "ar");
-  document.documentElement.lang = currentLang;
-  document.documentElement.dir  = currentLang === "ar" ? "rtl" : "ltr";
-  document.querySelectorAll(".lang-btn").forEach(b => b.classList.toggle("active", b.dataset.lang === currentLang));
-  navigate("home");
-}
-
-init();
+            <td class="text-sm">${l.target||""}
