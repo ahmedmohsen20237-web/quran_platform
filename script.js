@@ -1186,8 +1186,6 @@ async function adminApprovePayment(bookingId, decision) {
     showToast(decision==="approved" ? t("approved_msg") : t("rejected_msg"), decision==="approved"?"success":"info");
     switchAdminTab("payments");
   } catch(e) { showToast(e.message, "error"); }
-}
-
 async function renderAdminTeachers(container) {
   const teachers = await fetchAllUsers("teacher");
   container.innerHTML = `
@@ -1195,25 +1193,33 @@ async function renderAdminTeachers(container) {
     <div class="table-wrap"><table class="data-table">
       <thead><tr><th>${t("name")}</th><th>${t("email_col")}</th><th>${t("joined")}</th><th>${t("status")}</th><th>${t("actions")}</th></tr></thead>
       <tbody>
-        ${teachers.length ? teachers.map(u=>`
+        ${teachers.length ? teachers.map(u => {
+          let buttons = '';
+          // زر الموافقة والرفض يظهر فقط للمعلقين
+          if (u.status === "pending") {
+            buttons += `
+              <button class="btn btn-primary btn-sm" onclick="adminApproveTeacher('${u.uid || u.id}','active')">${t("approve")}</button>
+              <button class="btn btn-danger btn-sm" onclick="adminApproveTeacher('${u.uid || u.id}','rejected')">${t("reject")}</button>
+            `;
+          }
+          // زر الحذف يظهر دائماً لجميع المعلمين
+          buttons += `
+            <button class="btn btn-danger btn-sm" style="background:#ff4d4d; margin-right:5px;" onclick="deleteUser('${u.uid || u.id}')">حذف نهائي</button>
+          `;
+
+          return `
           <tr>
             <td class="fw-500">${u.name}</td>
             <td class="text-muted text-sm">${u.email}</td>
-            <td class="text-muted text-sm">${u.createdAt?.toDate?.()?.toLocaleDateString()||""}</td>
-            <td><span class="badge ${u.status==="active"?"badge-active":u.status==="pending"?"badge-pending":"badge-rejected"}">${u.status}</span></td>
-            <td>
-              ${u.status==="pending"?`
-                <div style="display:flex;gap:6px">
-                  <button class="btn btn-primary btn-sm" onclick="adminApproveTeacher('${u.uid||u.id}','active')">${t("approve")}</button>
-                  <button class="btn btn-danger btn-sm" onclick="adminApproveTeacher('${u.uid||u.id}','rejected')">${t("reject")}</button>
-                </div>`:"–"}
-            </td>
-          </tr>`).join("")
-        : `<tr><td colspan="5" style="text-align:center;padding:2rem;color:rgba(201,168,76,.4)">${t("no_data")}</td></tr>`}
+            <td class="text-muted text-sm">${u.createdAt?.toDate?.()?.toLocaleDateString() || ""}</td>
+            <td><span class="badge ${u.status === "active" ? "badge-active" : u.status === "pending" ? "badge-pending" : "badge-rejected"}">${u.status}</span></td>
+            <td><div style="display:flex; gap:6px; flex-wrap:wrap;">${buttons}</div></td>
+          </tr>`;
+        }).join("")
+        : `<tr><td colspan="5" style="text-align:center; padding:2rem;">${t("no_data")}</td></tr>`}
       </tbody>
     </table></div>`;
 }
-
 async function adminApproveTeacher(uid, status) {
   try {
     await updateDoc(doc(db,"users",uid), { status });
