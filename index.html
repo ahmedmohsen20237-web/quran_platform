@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>مدرسة القرآن الكريم | Quran Learning Platform</title>
+  <meta name="description" content="Learn Quran online with certified teachers via live Zoom sessions. Tajweed, Hifz, Arabic." />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Favicon emoji -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☾</text></svg>" />
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TOAST CONTAINER
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="toast-container"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     GLOBAL MODALS (shared across all pages)
+     ═══════════════════════════════════════════════════════════════ -->
+
+<!-- Book Session Modal -->
+<div id="modal-book" class="modal-overlay" style="display:none">
+  <div class="modal-box">
+    <div class="modal-title" id="modal-book-title">
+      📋 Book Session
+      <span class="arabic-sub">حجز الجلسة</span>
+    </div>
+    <div id="modal-book-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-book')">Cancel</button>
+      <button class="btn btn-primary" id="confirm-book-btn" onclick="confirmBooking()">Confirm Booking</button>
+    </div>
+  </div>
+</div>
+
+<!-- Upload Payment Modal -->
+<div id="modal-upload" class="modal-overlay" style="display:none">
+  <div class="modal-box">
+    <div class="modal-title">
+      💳 Upload Payment Receipt
+      <span class="arabic-sub">رفع إيصال الدفع</span>
+    </div>
+    <div id="modal-upload-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-upload')">Cancel</button>
+      <button class="btn btn-primary" id="submit-payment-btn" onclick="submitPayment()">Submit Receipt</button>
+    </div>
+  </div>
+</div>
+
+<!-- Session Form Modal (Teacher) -->
+<div id="modal-session" class="modal-overlay" style="display:none">
+  <div class="modal-box" style="max-width:580px">
+    <div class="modal-title" id="modal-session-title">
+      ➕ Create New Session
+    </div>
+    <div id="modal-session-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-session')">Cancel</button>
+      <button class="btn btn-primary" id="save-session-btn" onclick="saveSession()">Save Session</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     APP SHELL
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- ── HOME PAGE ─────────────────────────────────────────────── -->
+  <div id="page-home" class="page arabesque-bg">
+
+    <!-- Navbar -->
+    <nav class="navbar">
+      <a class="navbar-brand" onclick="navigate('home')">
+        <div class="navbar-logo-icon">☾</div>
+        <div class="navbar-brand-text">
+          <div class="navbar-brand-ar">مدرسة القرآن</div>
+          <div class="navbar-brand-en">Quran Learning Platform</div>
+        </div>
+      </a>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="lang-toggle">
+          <button class="lang-btn active" data-lang="en" onclick="setLang('en')">EN</button>
+          <button class="lang-btn" data-lang="ar" onclick="setLang('ar')">AR</button>
+        </div>
+        <div id="navbar-right" style="display:flex;gap:10px"></div>
+      </div>
+    </nav>
+
+    <div id="home-content"></div>
+  </div>
+
+  <!-- ── LOGIN PAGE ─────────────────────────────────────────────── -->
+  <div id="page-login" class="page arabesque-bg">
+    <!-- Navbar -->
+    <nav class="navbar">
+      <a class="navbar-brand" onclick="navigate('home')">
+        <div class="navbar-logo-icon">☾</div>
+        <div class="navbar-brand-text">
+          <div class="navbar-brand-ar">مدرسة القرآن</div>
+        </div>
+      </a>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="lang-toggle">
+          <button class="lang-btn active" data-lang="en" onclick="setLang('en')">EN</button>
+          <button class="lang-btn" data-lang="ar" onclick="setLang('ar')">AR</button>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="navigate('home')">← Home</button>
+      </div>
+    </nav>
+    <div id="login-content"></div>
+  </div>
+
+  <!-- ── REGISTER PAGE ─────────────────────────────────────────── -->
+  <div id="page-register" class="page arabesque-bg">
+    <nav class="navbar">
+      <a class="navbar-brand" onclick="navigate('home')">
+        <div class="navbar-logo-icon">☾</div>
+        <div class="navbar-brand-text">
+          <div class="navbar-brand-ar">مدرسة القرآن</div>
+        </div>
+      </a>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="lang-toggle">
+          <button class="lang-btn active" data-lang="en" onclick="setLang('en')">EN</button>
+          <button class="lang-btn" data-lang="ar" onclick="setLang('ar')">AR</button>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="navigate('login')">← Sign In</button>
+      </div>
+    </nav>
+    <div id="register-content"></div>
+  </div>
+
+  <!-- ── PUBLIC SESSIONS PAGE ──────────────────────────────────── -->
+  <div id="page-sessions" class="page arabesque-bg">
+    <nav class="navbar">
+      <a class="navbar-brand" onclick="navigate('home')">
+        <div class="navbar-logo-icon">☾</div>
+        <div class="navbar-brand-text">
+          <div class="navbar-brand-ar">مدرسة القرآن</div>
+        </div>
+      </a>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="lang-toggle">
+          <button class="lang-btn active" data-lang="en" onclick="setLang('en')">EN</button>
+          <button class="lang-btn" data-lang="ar" onclick="setLang('ar')">AR</button>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="navigate('login')">Sign In</button>
+        <button class="btn btn-gold btn-sm" onclick="navigate('register')">Get Started</button>
+      </div>
+    </nav>
+    <div id="sessions-content"></div>
+  </div>
+
+  <!-- ── STUDENT DASHBOARD ─────────────────────────────────────── -->
+  <div id="page-student" class="page">
+    <div id="student-content"></div>
+  </div>
+
+  <!-- ── TEACHER DASHBOARD ─────────────────────────────────────── -->
+  <div id="page-teacher" class="page">
+    <div id="teacher-content"></div>
+  </div>
+
+  <!-- ── ADMIN DASHBOARD ───────────────────────────────────────── -->
+  <div id="page-admin" class="page">
+    <div id="admin-content"></div>
+  </div>
+
+</div><!-- /#app -->
+
+<!-- ═══════════════════════════════════════════════════════════════
+     FIREBASE SDK v10 (Modular — ESM via CDN)
+     ═══════════════════════════════════════════════════════════════ -->
+<script type="module" src="script.js"></script>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     FIRESTORE SECURITY RULES (copy to Firebase Console)
+     ═══════════════════════════════════════════════════════════════
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users: readable by owner & admins, writable on create by anyone
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth.uid == userId;
+      allow update: if request.auth.uid == userId
+        || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Sessions: public read, teacher/admin write
+    match /sessions/{sessionId} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['teacher','admin'];
+      allow update: if request.auth != null
+        && (resource.data.teacherId == request.auth.uid
+            || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      allow delete: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Bookings: student creates their own, teacher/admin reads all
+    match /bookings/{bookingId} {
+      allow create: if request.auth != null
+        && request.resource.data.studentId == request.auth.uid;
+      allow read: if request.auth != null
+        && (resource.data.studentId == request.auth.uid
+            || resource.data.teacherId == request.auth.uid
+            || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      allow update: if request.auth != null
+        && (resource.data.studentId == request.auth.uid
+            || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+
+    // Notifications: user reads their own
+    match /notifications/{notifId} {
+      allow read, update: if request.auth != null
+        && (resource.data.userId == request.auth.uid
+            || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      allow create: if request.auth != null;
+    }
+
+    // Audit logs: admin reads, anyone creates
+    match /audit_logs/{logId} {
+      allow create: if request.auth != null;
+      allow read: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+  }
+}
+     ════════════════════════════════════════════════════════════ -->
+
+</body>
+</html>
