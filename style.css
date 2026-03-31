@@ -782,3 +782,135 @@ body.lang-ar .toast.info    { border-left: none; border-right: 3px solid var(--g
 .w-full { width: 100%; }
 .info-row { display: flex; gap: 10px; font-size: 13px; flex-wrap: wrap; color: rgba(201,168,76,0.55); }
 .info-row span { display: flex; align-items: center; gap: 5px; }
+
+/* ══════════════════════════════════════════════════════════════
+   ADMIN EXTENDED — btn-success, btn-warning, table responsive
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── New Button Variants ──────────────────────────────────────── */
+.btn-success {
+  background: linear-gradient(135deg, #1a6b3a 0%, #2d9968 100%);
+  color: #d4f5e6;
+  box-shadow: 0 3px 12px rgba(31,125,87,0.40);
+}
+.btn-success:hover  { filter: brightness(1.12); transform: translateY(-1px); }
+.btn-success:active { transform: translateY(0); }
+
+.btn-warning {
+  background: linear-gradient(135deg, #7a4f00 0%, #b37300 100%);
+  color: #fff3cd;
+  box-shadow: 0 3px 12px rgba(180,120,0,0.35);
+}
+.btn-warning:hover  { filter: brightness(1.12); transform: translateY(-1px); }
+.btn-warning:active { transform: translateY(0); }
+
+.btn-blue {
+  background: linear-gradient(135deg, #1a3a6b 0%, #2d6099 100%);
+  color: #cce0ff;
+  box-shadow: 0 3px 12px rgba(60,120,220,0.35);
+}
+.btn-blue:hover  { filter: brightness(1.12); transform: translateY(-1px); }
+
+/* ── Responsive Table Overrides (mobile scrollable) ──────────── */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Offer Card Grid ─────────────────────────────────────────── */
+.offer-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+/* ── Payment Method Card ─────────────────────────────────────── */
+.pm-card {
+  background: rgba(250,246,238,0.06);
+  border: 1px solid rgba(201,168,76,0.18);
+  border-radius: var(--r-lg);
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  transition: var(--transition);
+}
+.pm-card:hover { border-color: var(--border-strong); }
+
+/* ── Coupon Code Badge ───────────────────────────────────────── */
+.coupon-code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  background: rgba(9,30,18,0.65);
+  padding: 3px 10px;
+  border-radius: 5px;
+  color: var(--emerald-light);
+  letter-spacing: 0.1em;
+  border: 1px dashed rgba(31,125,87,0.4);
+  display: inline-block;
+  margin-top: 4px;
+}
+
+/* ── Subscription Status Badges ─────────────────────────────── */
+.badge-sub-active   { background: rgba(31,125,87,0.22);  color: #7DDBB0; border-color: rgba(31,125,87,0.45); }
+.badge-sub-expired  { background: rgba(163,53,53,0.18);  color: #F4A0A0; border-color: rgba(163,53,53,0.40); }
+.badge-sub-none     { background: rgba(100,100,100,0.15);color: #aaa;    border-color: rgba(100,100,100,0.3); }
+
+/* ── Section separator ───────────────────────────────────────── */
+.section-sep {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
+  margin: 2rem 0;
+}
+
+/* ── Action Buttons Row compact ──────────────────────────────── */
+.action-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* ── Responsive grid for admin stats ─────────────────────────── */
+@media (max-width: 900px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 600px) {
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+  .data-table th:nth-child(n+4),
+  .data-table td:nth-child(n+4) {
+    display: none;
+  }
+  .table-wrap {
+    border-radius: var(--r-sm);
+  }
+  .action-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .action-row .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .offer-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Admin sidebar scrollable on small heights ───────────────── */
+@media (max-height: 700px) {
+  .sidebar-nav { max-height: calc(100vh - 200px); overflow-y: auto; }
+}
+
+/* ── Inline form panel (inside dashboard, no modal) ──────────── */
+.inline-form-panel {
+  background: rgba(250,246,238,0.05);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  padding: 1.5rem;
+  margin-top: 1.5rem;
+  animation: fadeSlideIn 0.25s ease;
+}

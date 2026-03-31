@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════
    QURAN PLATFORM — script.js
    Firebase Auth + Firestore + Cloudinary + i18n + SPA Router
+   Enhanced Admin: Teacher Mgmt, Subscriptions, Offers, Payment Methods
    ═══════════════════════════════════════════════════════════════ */
 
 // ── Firebase Config ─────────────────────────────────────────────
@@ -31,6 +32,9 @@ const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = getFirestore(app);
 
+// Expose db globally to prevent conflicts
+window.db = db;
+
 /* ═══════════════════════════════════════════════════════════════
    i18n — TRANSLATIONS
    ═══════════════════════════════════════════════════════════════ */
@@ -56,6 +60,8 @@ const T = {
     teacher_approvals: "Teacher Approvals", users_mgmt: "Users",
     all_sessions: "All Sessions", all_bookings: "All Bookings",
     reports: "Reports", audit_log: "Audit Log",
+    subscriptions: "Subscriptions", payment_methods: "Payment Methods",
+    offers_coupons: "Offers & Coupons",
     // Stats
     total_students: "Students", total_teachers: "Teachers",
     total_sessions: "Sessions", pending_payments: "Pending Payments",
@@ -93,6 +99,23 @@ const T = {
     price: "Price (SAR)", description: "Description",
     create_session: "+ New Session", edit_session: "Edit",
     save: "Save", update: "Update",
+    // Admin — new
+    delete_user: "Delete", delete_confirm: "Are you sure you want to permanently delete this user?",
+    activate_sub: "Activate Subscription", sub_activated: "Subscription activated successfully.",
+    create_offer: "Create Offer", offer_created: "Offer created successfully.",
+    offer_title: "Offer Title", offer_discount: "Discount %",
+    offer_code: "Coupon Code", offer_expiry: "Expiry Date",
+    offer_type: "Offer Type", offer_fixed: "Fixed Amount",
+    offer_percent: "Percentage", offer_value: "Value",
+    offer_minprice: "Min. Order (SAR)", offer_maxuses: "Max Uses",
+    add_payment_method: "Add Payment Method",
+    method_name: "Method Name", method_details: "Account / Details",
+    method_icon: "Icon (Emoji)", method_active: "Active",
+    payment_method_saved: "Payment method saved.",
+    payment_method_deleted: "Payment method deleted.",
+    offer_deleted: "Offer deleted.",
+    sub_type: "Subscription Type", sub_expiry: "Expiry",
+    sub_status: "Sub. Status",
     // Messages
     booked_success: "Session booked! Please upload your payment receipt.",
     upload_success: "Receipt submitted. Waiting for admin review.",
@@ -114,7 +137,7 @@ const T = {
   ar: {
     home: "الرئيسية", login: "تسجيل الدخول", register: "ابدأ الآن",
     dashboard: "لوحة التحكم", signout: "تسجيل الخروج",
-    browseseessions: "تصفح الجلسات",
+    browsesessions: "تصفح الجلسات",
     signin_title: "مرحباً بعودتك", register_title: "إنشاء حساب",
     email: "البريد الإلكتروني", password: "كلمة المرور", confirmpass: "تأكيد كلمة المرور",
     fullname: "الاسم الكامل", role: "التسجيل بصفة",
@@ -129,6 +152,8 @@ const T = {
     teacher_approvals: "موافقات المعلمين", users_mgmt: "المستخدمون",
     all_sessions: "جميع الجلسات", all_bookings: "جميع الحجوزات",
     reports: "التقارير", audit_log: "سجل المراقبة",
+    subscriptions: "الاشتراكات", payment_methods: "طرق الدفع",
+    offers_coupons: "العروض والكوبونات",
     total_students: "الطلاب", total_teachers: "المعلمون",
     total_sessions: "الجلسات", pending_payments: "مدفوعات معلقة",
     total_bookings: "الحجوزات", revenue: "الإيرادات (ر.س)",
@@ -161,6 +186,23 @@ const T = {
     price: "السعر (ر.س)", description: "الوصف",
     create_session: "+ جلسة جديدة", edit_session: "تعديل",
     save: "حفظ", update: "تحديث",
+    // Admin — new
+    delete_user: "حذف نهائي", delete_confirm: "هل أنت متأكد من حذف هذا المستخدم نهائياً؟",
+    activate_sub: "تفعيل الاشتراك", sub_activated: "تم تفعيل الاشتراك بنجاح.",
+    create_offer: "إنشاء عرض", offer_created: "تم إنشاء العرض بنجاح.",
+    offer_title: "عنوان العرض", offer_discount: "نسبة الخصم %",
+    offer_code: "كود الكوبون", offer_expiry: "تاريخ الانتهاء",
+    offer_type: "نوع العرض", offer_fixed: "مبلغ ثابت",
+    offer_percent: "نسبة مئوية", offer_value: "القيمة",
+    offer_minprice: "الحد الأدنى للطلب (ر.س)", offer_maxuses: "الحد الأقصى للاستخدام",
+    add_payment_method: "إضافة طريقة دفع",
+    method_name: "اسم الطريقة", method_details: "الحساب / التفاصيل",
+    method_icon: "أيقونة (إيموجي)", method_active: "نشطة",
+    payment_method_saved: "تم حفظ طريقة الدفع.",
+    payment_method_deleted: "تم حذف طريقة الدفع.",
+    offer_deleted: "تم حذف العرض.",
+    sub_type: "نوع الاشتراك", sub_expiry: "تاريخ الانتهاء",
+    sub_status: "حالة الاشتراك",
     booked_success: "تم الحجز! يرجى رفع إيصال الدفع.",
     upload_success: "تم إرسال الإيصال. في انتظار مراجعة المدير.",
     approved_msg: "✅ تمت الموافقة على الدفع. يمكنك الآن دخول الحلقة.",
@@ -185,10 +227,11 @@ const T = {
    STATE
    ═══════════════════════════════════════════════════════════════ */
 let currentLang = localStorage.getItem("lang") || "en";
-let currentUser = null;       // Firebase user
-let userProfile = null;       // Firestore profile
+let currentUser = null;
+let userProfile = null;
 let currentPage = "home";
-let unsubListeners = [];      // Firestore snapshot listeners to clean up
+let unsubListeners = [];
+let editingSessionId = null;
 
 const t = (key) => T[currentLang][key] || key;
 
@@ -218,7 +261,6 @@ function setLang(lang) {
   document.documentElement.lang = lang;
   document.documentElement.dir  = lang === "ar" ? "rtl" : "ltr";
   document.querySelectorAll(".lang-btn").forEach(b => b.classList.toggle("active", b.dataset.lang === lang));
-  // Re-render current page content
   renderCurrentPage();
 }
 
@@ -269,9 +311,9 @@ function updateNavbar() {
 function goToDash() {
   if (!userProfile) return navigate("login");
   const role = userProfile.role;
-  if (role === "admin")   navigate("admin");
+  if (role === "admin")        navigate("admin");
   else if (role === "teacher") navigate("teacher");
-  else                    navigate("student");
+  else                         navigate("student");
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -302,7 +344,6 @@ async function handleRegister(e) {
       createdAt: serverTimestamp(), avatar: name[0].toUpperCase()
     });
     showToast(role === "teacher" ? t("teacher_note") : "Account created! Signing you in…", "success");
-    // Auth listener will redirect
   } catch (err) {
     errEl.textContent = err.message; errEl.classList.remove("hidden");
     btn.disabled = false; btn.textContent = t("register_btn");
@@ -321,7 +362,6 @@ async function handleLogin(e) {
 
   try {
     await signInWithEmailAndPassword(auth, email, password);
-    // Redirect handled by auth listener
   } catch (err) {
     errEl.textContent = "Invalid email or password.";
     errEl.classList.remove("hidden");
@@ -446,7 +486,6 @@ function renderLogin() {
 
 async function quickLogin(email, password) {
   try {
-    // First ensure demo users exist in Firebase
     await ensureDemoUsers();
     await signInWithEmailAndPassword(auth, email, password);
   } catch(e) {
@@ -454,7 +493,6 @@ async function quickLogin(email, password) {
   }
 }
 
-// Creates demo accounts in Firebase if they don't exist
 async function ensureDemoUsers() {
   const demos = [
     { email:"admin@quran.edu", password:"admin123", name:"Admin User", role:"admin", status:"active" },
@@ -558,6 +596,20 @@ async function fetchAllBookings() {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
+async function fetchOffers() {
+  try {
+    const snap = await getDocs(collection(db,"offers"));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(e) { return []; }
+}
+
+async function fetchPaymentMethods() {
+  try {
+    const snap = await getDocs(collection(db,"payment_methods"));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(e) { return []; }
+}
+
 function loadingHTML() {
   return `<div style="text-align:center;padding:3rem;color:var(--gold);opacity:.6">${t("loading")}</div>`;
 }
@@ -631,14 +683,24 @@ async function openBookModal(sessionId) {
   const snap = await getDoc(doc(db,"sessions",sessionId));
   const s = snap.data();
   const price = s.price || 0;
-  document.getElementById("modal-book-title").textContent = `${t("book_title")} — ${s.title}`;
-  document.getElementById("modal-book-body").innerHTML = `
-    <div class="glass-card-light" style="padding:1rem;margin-bottom:1rem">
-      <p style="font-weight:500;margin-bottom:6px">${s.title}</p>
-      <div class="info-row"><span>📅 ${s.date} ${currentLang==="ar"?"الساعة":"at"} ${s.time}</span><span>⏱️ ${s.duration}min</span></div>
-    </div>
-    <div class="alert alert-info">💳 ${currentLang==="ar"?"بعد الحجز، ارفع إيصال التحويل البنكي لتأكيد مقعدك.":"After booking, upload your bank transfer proof to confirm your seat."}</div>
-    <div style="background:rgba(9,30,18,.5);padding:1rem;border-radius:var(--r-sm);font-size:13px;border:1px solid var(--border)">
+
+  // Fetch available payment methods from Firestore
+  const methods = await fetchPaymentMethods();
+  const activeMethods = methods.filter(m => m.active !== false);
+
+  const methodsHTML = activeMethods.length ? `
+    <div style="background:rgba(9,30,18,.5);padding:1rem;border-radius:var(--r-sm);border:1px solid var(--border);margin-top:1rem">
+      <p style="font-weight:600;color:var(--gold-light);margin-bottom:10px">💳 ${currentLang==="ar"?"طرق الدفع المتاحة":"Available Payment Methods"}</p>
+      ${activeMethods.map(m => `
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-top:1px solid var(--border)">
+          <span style="font-size:1.4rem">${m.icon||"💳"}</span>
+          <div>
+            <p style="font-weight:600;font-size:13px;color:var(--cream)">${m.name}</p>
+            <p style="font-size:12px;color:var(--muted);white-space:pre-line">${m.details||""}</p>
+          </div>
+        </div>`).join("")}
+    </div>` : `
+    <div style="background:rgba(9,30,18,.5);padding:1rem;border-radius:var(--r-sm);font-size:13px;border:1px solid var(--border);margin-top:1rem">
       <p style="font-weight:600;color:var(--gold-light);margin-bottom:10px">🏦 ${t("bank_details")}</p>
       <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 14px">
         <span class="text-muted">${t("bank_name")}:</span><span>${t("bank_name_val")}</span>
@@ -647,6 +709,15 @@ async function openBookModal(sessionId) {
         <span class="text-muted">${t("amount")}:</span><span style="color:var(--gold);font-weight:700">${t("price_label")} ${price}</span>
       </div>
     </div>`;
+
+  document.getElementById("modal-book-title").textContent = `${t("book_title")} — ${s.title}`;
+  document.getElementById("modal-book-body").innerHTML = `
+    <div class="glass-card-light" style="padding:1rem;margin-bottom:1rem">
+      <p style="font-weight:500;margin-bottom:6px">${s.title}</p>
+      <div class="info-row"><span>📅 ${s.date} ${currentLang==="ar"?"الساعة":"at"} ${s.time}</span><span>⏱️ ${s.duration}min</span></div>
+    </div>
+    <div class="alert alert-info">💳 ${currentLang==="ar"?"بعد الحجز، ارفع إيصال التحويل لتأكيد مقعدك.":"After booking, upload your transfer proof to confirm your seat."}</div>
+    ${methodsHTML}`;
   showModal("modal-book");
 }
 
@@ -781,9 +852,9 @@ async function renderStudentDash(params = {}) {
 
   const [sessions, bookings] = await Promise.all([fetchSessions(), fetchUserBookings(currentUser.uid)]);
 
-  if (studentTab === "overview")    renderStudentOverview(contentArea, sessions, bookings);
-  else if (studentTab === "sessions")  renderStudentSessions(contentArea, sessions, bookings);
-  else if (studentTab === "mybookings") renderStudentBookings(contentArea, bookings, sessions);
+  if (studentTab === "overview")         renderStudentOverview(contentArea, sessions, bookings);
+  else if (studentTab === "sessions")    renderStudentSessions(contentArea, sessions, bookings);
+  else if (studentTab === "mybookings")  renderStudentBookings(contentArea, bookings, sessions);
   else if (studentTab === "notifications") renderNotifications(contentArea, currentUser.uid);
 }
 
@@ -824,19 +895,17 @@ async function renderStudentBookings(container, bookings, sessions) {
       ${bookings.map(b => {
         const s = sessions.find(ss => ss.id === b.sessionId);
         const ps = b.paymentStatus||"pending";
-        let action = "";
-        if (ps === "approved") action = `<button class="join-btn" onclick="handleJoinSession('${b.sessionId}')">${t("join_session")}</button>`;
-        else if (!b.receiptUrl) action = `<button class="btn btn-gold btn-sm" onclick="openUploadModal('${b.sessionId}','${b.id}')">${t("upload_payment")}</button>`;
-        return `<div class="glass-card-light" style="padding:1.25rem">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
-            <div><p style="font-weight:500;margin-bottom:4px">${b.sessionTitle||"Session"}</p>
-              <div class="info-row"><span>📅 ${s?.date||""}</span><span>👤 ${s?.teacherName||""}</span></div></div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <span class="badge ${ps==="approved"?"badge-active":ps==="rejected"?"badge-rejected":"badge-pending"}">${ps==="approved"?t("approved_badge"):ps==="rejected"?t("rejected_badge"):t("awaiting_approval")}</span>
-              ${action}
+        const badgeCls = ps==="approved"?"badge-active":ps==="rejected"?"badge-rejected":"badge-pending";
+        return `<div class="glass-card-light" style="padding:1rem">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+            <div>
+              <p class="fw-500">${b.sessionTitle||""}</p>
+              <p class="text-muted text-sm">📅 ${s?.date||""} · 👤 ${s?.teacherName||""}</p>
             </div>
+            <span class="badge ${badgeCls}">${ps}</span>
           </div>
-          ${b.receiptUrl?`<div style="margin-top:10px;font-size:12.5px"><span class="text-muted">Receipt: </span><a href="${b.receiptUrl}" target="_blank" class="receipt-link">View ↗</a></div>`:""}
+          ${ps==="pending"?`<button class="btn btn-gold btn-sm" style="margin-top:10px" onclick="openUploadModal('${b.sessionId}','${b.id}')">${t("upload_payment")}</button>`:""}
+          ${ps==="approved"?`<button class="join-btn" style="margin-top:10px" onclick="handleJoinSession('${b.sessionId}')">${t("join_session")}</button>`:""}
         </div>`;
       }).join("")}
     </div>`;
@@ -846,34 +915,37 @@ async function renderStudentBookings(container, bookings, sessions) {
    TEACHER DASHBOARD
    ═══════════════════════════════════════════════════════════════ */
 let teacherTab = "overview";
-let editingSessionId = null;
 
 async function renderTeacherDash(params = {}) {
   if (params.tab) teacherTab = params.tab;
   const el = document.getElementById("teacher-content");
   el.innerHTML = buildDashLayout("teacher", [
-    { section: currentLang==="ar"?"المعلم":"Teacher", items: [
+    { section: currentLang==="ar"?"الرئيسية":"Main", items: [
       { id:"overview", icon:"🏠", label:t("overview") },
-      { id:"mysessions", icon:"📚", label:t("my_sessions") },
-      { id:"students", icon:"👨‍🎓", label:t("students") },
+      { id:"sessions", icon:"📚", label:t("sessions_mgmt") },
+      { id:"students", icon:"👥", label:t("students") },
       { id:"notifications", icon:"🔔", label:t("notifications") },
     ]}
   ], teacherTab);
+
   const contentArea = document.getElementById("dash-content-area");
   contentArea.innerHTML = loadingHTML();
-  const sessions = await fetchSessions(currentUser.uid);
-  const allBookings = await fetchAllBookings();
-  const myBookings = allBookings.filter(b => sessions.some(s => s.id === b.sessionId));
 
-  if (teacherTab === "overview")   renderTeacherOverview(contentArea, sessions, myBookings);
-  else if (teacherTab === "mysessions") renderTeacherSessions(contentArea, sessions, myBookings);
+  const [sessions, bookings] = await Promise.all([
+    fetchSessions(currentUser.uid),
+    fetchAllBookings()
+  ]);
+  const myBookings = bookings.filter(b => b.teacherId === currentUser.uid);
+
+  if (teacherTab === "overview")     renderTeacherOverview(contentArea, sessions, myBookings);
+  else if (teacherTab === "sessions") renderTeacherSessions(contentArea, sessions, myBookings);
   else if (teacherTab === "students") renderTeacherStudents(contentArea, sessions, myBookings);
   else if (teacherTab === "notifications") renderNotifications(contentArea, currentUser.uid);
 }
 
 function renderTeacherOverview(container, sessions, bookings) {
-  const enrolled  = sessions.reduce((a,s) => a+(s.enrolled||0), 0);
-  const revenue   = bookings.filter(b=>b.paymentStatus==="approved").length; // simplified
+  const enrolled = sessions.reduce((a,s) => a+(s.enrolled||0), 0);
+  const revenue  = bookings.filter(b=>b.paymentStatus==="approved").length;
   container.innerHTML = `
     <div style="margin-bottom:1.5rem">
       <div style="font-family:var(--font-arabic);font-size:1.3rem;color:var(--gold);margin-bottom:4px">مرحباً، ${userProfile.name.split(" ")[0]}</div>
@@ -1048,7 +1120,7 @@ let adminTab = "overview";
 async function renderAdminDash(params = {}) {
   if (params.tab) adminTab = params.tab;
   const el = document.getElementById("admin-content");
-  // Count pending items for badges
+
   let pendingPayments = 0, pendingTeachers = 0;
   try {
     const pSnap = await getDocs(query(collection(db,"bookings"), where("paymentStatus","==","receipt_uploaded")));
@@ -1059,41 +1131,48 @@ async function renderAdminDash(params = {}) {
 
   el.innerHTML = buildDashLayout("admin", [
     { section: currentLang==="ar"?"الإدارة":"Admin Control", items: [
-      { id:"overview", icon:"🏠", label:t("overview") },
-      { id:"payments", icon:"💳", label:t("payments"), badge: pendingPayments||null },
-      { id:"teachers", icon:"👨‍🏫", label:t("teacher_approvals"), badge: pendingTeachers||null },
-      { id:"users", icon:"👥", label:t("users_mgmt") },
-      { id:"allsessions", icon:"📚", label:t("all_sessions") },
-      { id:"allbookings", icon:"📋", label:t("all_bookings") },
-      { id:"reports", icon:"📊", label:t("reports") },
-      { id:"audit", icon:"🔍", label:t("audit_log") },
-      { id:"notifications", icon:"🔔", label:t("notifications") },
+      { id:"overview",     icon:"🏠", label:t("overview") },
+      { id:"payments",     icon:"💳", label:t("payments"),           badge: pendingPayments||null },
+      { id:"subscriptions",icon:"🔑", label:t("subscriptions") },
+      { id:"teachers",     icon:"👨‍🏫", label:t("teacher_approvals"),  badge: pendingTeachers||null },
+      { id:"users",        icon:"👥", label:t("users_mgmt") },
+      { id:"allsessions",  icon:"📚", label:t("all_sessions") },
+      { id:"allbookings",  icon:"📋", label:t("all_bookings") },
+      { id:"paymentmethods",icon:"🏦",label:t("payment_methods") },
+      { id:"offers",       icon:"🎁", label:t("offers_coupons") },
+      { id:"reports",      icon:"📊", label:t("reports") },
+      { id:"audit",        icon:"🔍", label:t("audit_log") },
+      { id:"notifications",icon:"🔔", label:t("notifications") },
     ]}
   ], adminTab);
 
   const contentArea = document.getElementById("dash-content-area");
   contentArea.innerHTML = loadingHTML();
 
-  if (adminTab === "overview")    await renderAdminOverview(contentArea);
-  else if (adminTab === "payments")  await renderAdminPayments(contentArea);
-  else if (adminTab === "teachers")  await renderAdminTeachers(contentArea);
-  else if (adminTab === "users")     await renderAdminUsers(contentArea);
-  else if (adminTab === "allsessions") await renderAdminSessions(contentArea);
-  else if (adminTab === "allbookings") await renderAdminBookings(contentArea);
-  else if (adminTab === "reports")   await renderAdminReports(contentArea);
-  else if (adminTab === "audit")     await renderAdminAudit(contentArea);
-  else if (adminTab === "notifications") renderNotifications(contentArea, currentUser.uid);
+  if      (adminTab === "overview")       await renderAdminOverview(contentArea);
+  else if (adminTab === "payments")       await renderAdminPayments(contentArea);
+  else if (adminTab === "subscriptions")  await renderAdminSubscriptions(contentArea);
+  else if (adminTab === "teachers")       await renderAdminTeachers(contentArea);
+  else if (adminTab === "users")          await renderAdminUsers(contentArea);
+  else if (adminTab === "allsessions")    await renderAdminSessions(contentArea);
+  else if (adminTab === "allbookings")    await renderAdminBookings(contentArea);
+  else if (adminTab === "paymentmethods") await renderAdminPaymentMethods(contentArea);
+  else if (adminTab === "offers")         await renderAdminOffers(contentArea);
+  else if (adminTab === "reports")        await renderAdminReports(contentArea);
+  else if (adminTab === "audit")          await renderAdminAudit(contentArea);
+  else if (adminTab === "notifications")  renderNotifications(contentArea, currentUser.uid);
 }
 
+/* ─── Admin Overview ─────────────────────────────────────────── */
 async function renderAdminOverview(container) {
   const [users, sessions, bookings] = await Promise.all([fetchAllUsers(), fetchSessions(), fetchAllBookings()]);
   const stats = {
-    students: users.filter(u=>u.role==="student").length,
-    teachers: users.filter(u=>u.role==="teacher"&&u.status==="active").length,
-    sessions: sessions.length,
-    bookings: bookings.length,
+    students:   users.filter(u=>u.role==="student").length,
+    teachers:   users.filter(u=>u.role==="teacher"&&u.status==="active").length,
+    sessions:   sessions.length,
+    bookings:   bookings.length,
     pendingPay: bookings.filter(b=>b.paymentStatus==="receipt_uploaded").length,
-    revenue: 0,
+    revenue:    0,
   };
   container.innerHTML = `
     <div style="margin-bottom:1.5rem">
@@ -1134,6 +1213,7 @@ async function renderAdminOverview(container) {
     </div>`;
 }
 
+/* ─── Admin Payments ─────────────────────────────────────────── */
 async function renderAdminPayments(container) {
   const bookings = await fetchAllBookings();
   const withReceipts = bookings.filter(b => b.receiptUrl || b.paymentStatus === "receipt_uploaded" || b.paymentStatus === "approved" || b.paymentStatus === "rejected");
@@ -1155,11 +1235,13 @@ async function renderAdminPayments(container) {
             <td class="text-muted text-sm">${b.uploadedAt?.toDate?.()?.toLocaleDateString()||""}</td>
             <td><span class="badge ${b.paymentStatus==="approved"?"badge-active":b.paymentStatus==="rejected"?"badge-rejected":"badge-pending"}">${b.paymentStatus||""}</span></td>
             <td>
-              ${b.paymentStatus==="receipt_uploaded"?`
-                <div style="display:flex;gap:6px;flex-wrap:wrap">
-                  <button class="btn btn-primary btn-sm" onclick="adminApprovePayment('${b.id}','approved')">${t("approve")}</button>
-                  <button class="btn btn-danger btn-sm" onclick="adminApprovePayment('${b.id}','rejected')">${t("reject")}</button>
-                </div>`:"–"}
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                ${b.paymentStatus==="receipt_uploaded"?`
+                  <button class="btn btn-success btn-sm" onclick="adminApprovePayment('${b.id}','approved')">${t("approve")}</button>
+                  <button class="btn btn-danger btn-sm" onclick="adminApprovePayment('${b.id}','rejected')">${t("reject")}</button>`
+                : b.paymentStatus!=="approved"?`<button class="btn btn-success btn-sm" onclick="adminApprovePayment('${b.id}','approved')">${t("activate_sub")}</button>`
+                :"–"}
+              </div>
             </td>
           </tr>`).join("")
         : `<tr><td colspan="7" style="text-align:center;padding:2rem;color:rgba(201,168,76,.4)">${t("no_data")}</td></tr>`}
@@ -1169,31 +1251,132 @@ async function renderAdminPayments(container) {
 
 async function adminApprovePayment(bookingId, decision) {
   try {
-    const bSnap = await getDoc(doc(db,"bookings",bookingId));
+    const bSnap = await getDoc(doc(window.db,"bookings",bookingId));
     const booking = bSnap.data();
-    await updateDoc(doc(db,"bookings",bookingId), {
+    await updateDoc(doc(window.db,"bookings",bookingId), {
       paymentStatus: decision,
       reviewedAt: serverTimestamp(),
       reviewedBy: currentUser.uid
     });
-    // Notify student
-    await addDoc(collection(db,"notifications"), {
+    await addDoc(collection(window.db,"notifications"), {
       userId: booking.studentId, type: decision==="approved"?"success":"error",
       message: decision==="approved" ? t("approved_msg") : t("rejected_msg"),
       read: false, createdAt: serverTimestamp()
     });
-    await addDoc(collection(db,"audit_logs"), { userId: currentUser.uid, action: `PAYMENT_${decision.toUpperCase()}`, target: `Booking:${bookingId}`, timestamp: serverTimestamp() });
+    await addDoc(collection(window.db,"audit_logs"), { userId: currentUser.uid, action: `PAYMENT_${decision.toUpperCase()}`, target: `Booking:${bookingId}`, timestamp: serverTimestamp() });
     showToast(decision==="approved" ? t("approved_msg") : t("rejected_msg"), decision==="approved"?"success":"info");
     switchAdminTab("payments");
   } catch(e) { showToast(e.message, "error"); }
 }
 
+/* ─── Admin Subscriptions ────────────────────────────────────── */
+async function renderAdminSubscriptions(container) {
+  const [bookings, users] = await Promise.all([fetchAllBookings(), fetchAllUsers("student")]);
+  const approvedBookings = bookings.filter(b => b.paymentStatus === "approved" || b.paymentStatus === "receipt_uploaded" || b.paymentStatus === "pending");
+
+  container.innerHTML = `
+    <div class="section-header">
+      <div class="section-title">${t("subscriptions")}</div>
+    </div>
+    <div class="alert alert-info" style="margin-bottom:1.5rem">
+      ℹ️ ${currentLang==="ar"?"يمكنك تفعيل اشتراك الطالب يدوياً بعد التحقق من الدفع خارج المنصة.":"You can manually activate a student subscription after verifying payment outside the platform."}
+    </div>
+    <div class="table-wrap"><table class="data-table">
+      <thead><tr>
+        <th>${t("student_name")}</th>
+        <th>${t("session_name")}</th>
+        <th>${currentLang==="ar"?"تاريخ الحجز":"Booked At"}</th>
+        <th>${t("status")}</th>
+        <th>${t("actions")}</th>
+      </tr></thead>
+      <tbody>
+        ${approvedBookings.length ? approvedBookings.map(b=>`
+          <tr>
+            <td class="fw-500">${b.studentName||""}</td>
+            <td class="text-muted">${b.sessionTitle||""}</td>
+            <td class="text-muted text-sm">${b.bookedAt?.toDate?.()?.toLocaleDateString()||""}</td>
+            <td><span class="badge ${b.paymentStatus==="approved"?"badge-active":b.paymentStatus==="rejected"?"badge-rejected":"badge-pending"}">${b.paymentStatus||""}</span></td>
+            <td>
+              ${b.paymentStatus!=="approved"?`
+                <button class="btn btn-success btn-sm" onclick="approvePayment('${b.id}')">
+                  ✅ ${t("activate_sub")}
+                </button>`:"<span style='color:var(--emerald-light);font-size:12px'>✓ ${currentLang==='ar'?'مفعّل':'Active'}</span>"}
+            </td>
+          </tr>`).join("")
+        : `<tr><td colspan="5" style="text-align:center;padding:2rem;color:rgba(201,168,76,.4)">${t("no_data")}</td></tr>`}
+      </tbody>
+    </table></div>
+    <div style="margin-top:2rem">
+      <div class="section-header"><div class="section-title">${currentLang==="ar"?"تفعيل اشتراك يدوي":"Manual Subscription Activation"}</div></div>
+      <div class="glass-card-light" style="padding:1.25rem">
+        <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">${currentLang==="ar"?"بريد الطالب":"Student Email"}</label>
+            <input id="sub-student-email" class="form-input" placeholder="${currentLang==="ar"?"student@example.com":"student@example.com"}">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">${currentLang==="ar"?"نوع الاشتراك":"Subscription Type"}</label>
+            <select id="sub-type" class="form-select">
+              <option value="monthly">${currentLang==="ar"?"شهري":"Monthly"}</option>
+              <option value="quarterly">${currentLang==="ar"?"ربع سنوي":"Quarterly"}</option>
+              <option value="yearly">${currentLang==="ar"?"سنوي":"Yearly"}</option>
+            </select>
+          </div>
+          <button class="btn btn-success" onclick="manualActivateSub()">✅ ${t("activate_sub")}</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function approvePayment(bookingId) {
+  await adminApprovePayment(bookingId, "approved");
+  switchAdminTab("subscriptions");
+}
+
+async function manualActivateSub() {
+  const email   = document.getElementById("sub-student-email")?.value?.trim().toLowerCase();
+  const subType = document.getElementById("sub-type")?.value;
+  if (!email) { showToast(currentLang==="ar"?"يرجى إدخال بريد الطالب":"Please enter student email.", "error"); return; }
+
+  try {
+    const usersSnap = await getDocs(query(collection(window.db,"users"), where("email","==",email)));
+    if (usersSnap.empty) { showToast(currentLang==="ar"?"المستخدم غير موجود":"User not found.", "error"); return; }
+    const userDoc = usersSnap.docs[0];
+    const uid = userDoc.id;
+
+    const expiryDays = { monthly:30, quarterly:90, yearly:365 }[subType] || 30;
+    const expiry = new Date(); expiry.setDate(expiry.getDate() + expiryDays);
+
+    await updateDoc(doc(window.db,"users",uid), {
+      subscriptionStatus: "active",
+      subscriptionType: subType,
+      subscriptionExpiry: expiry.toISOString(),
+      subscriptionActivatedAt: serverTimestamp(),
+      subscriptionActivatedBy: currentUser.uid
+    });
+    await addDoc(collection(window.db,"notifications"), {
+      userId: uid, type: "success",
+      message: currentLang==="ar"
+        ? `✅ تم تفعيل اشتراكك (${subType}) حتى ${expiry.toLocaleDateString()}`
+        : `✅ Your subscription (${subType}) activated until ${expiry.toLocaleDateString()}`,
+      read: false, createdAt: serverTimestamp()
+    });
+    await addDoc(collection(window.db,"audit_logs"), { userId: currentUser.uid, action: "SUBSCRIPTION_ACTIVATED", target: `User:${uid}`, timestamp: serverTimestamp() });
+    showToast(t("sub_activated"), "success");
+    switchAdminTab("subscriptions");
+  } catch(e) { showToast(e.message, "error"); }
+}
+
+/* ─── Admin Teachers ─────────────────────────────────────────── */
 async function renderAdminTeachers(container) {
   const teachers = await fetchAllUsers("teacher");
   container.innerHTML = `
     <div class="section-header"><div class="section-title">${t("teacher_approvals")}</div></div>
     <div class="table-wrap"><table class="data-table">
-      <thead><tr><th>${t("name")}</th><th>${t("email_col")}</th><th>${t("joined")}</th><th>${t("status")}</th><th>${t("actions")}</th></tr></thead>
+      <thead><tr>
+        <th>${t("name")}</th><th>${t("email_col")}</th>
+        <th>${t("joined")}</th><th>${t("status")}</th><th>${t("actions")}</th>
+      </tr></thead>
       <tbody>
         ${teachers.length ? teachers.map(u=>`
           <tr>
@@ -1202,11 +1385,15 @@ async function renderAdminTeachers(container) {
             <td class="text-muted text-sm">${u.createdAt?.toDate?.()?.toLocaleDateString()||""}</td>
             <td><span class="badge ${u.status==="active"?"badge-active":u.status==="pending"?"badge-pending":"badge-rejected"}">${u.status}</span></td>
             <td>
-              ${u.status==="pending"?`
-                <div style="display:flex;gap:6px">
-                  <button class="btn btn-primary btn-sm" onclick="adminApproveTeacher('${u.uid||u.id}','active')">${t("approve")}</button>
-                  <button class="btn btn-danger btn-sm" onclick="adminApproveTeacher('${u.uid||u.id}','rejected')">${t("reject")}</button>
-                </div>`:"–"}
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                ${u.status==="pending"?`
+                  <button class="btn btn-success btn-sm" onclick="adminApproveTeacher('${u.uid||u.id}','active')">✅ ${t("approve")}</button>
+                  <button class="btn btn-warning btn-sm" onclick="adminApproveTeacher('${u.uid||u.id}','rejected')">⛔ ${t("reject")}</button>`
+                : u.status==="active"?`
+                  <button class="btn btn-warning btn-sm" onclick="adminApproveTeacher('${u.uid||u.id}','rejected')">⛔ ${t("reject")}</button>`
+                :`<button class="btn btn-success btn-sm" onclick="adminApproveTeacher('${u.uid||u.id}','active')">✅ ${t("approve")}</button>`}
+                <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.uid||u.id}','${u.name?.replace(/'/g,'')}')">🗑️ ${t("delete_user")}</button>
+              </div>
             </td>
           </tr>`).join("")
         : `<tr><td colspan="5" style="text-align:center;padding:2rem;color:rgba(201,168,76,.4)">${t("no_data")}</td></tr>`}
@@ -1216,24 +1403,29 @@ async function renderAdminTeachers(container) {
 
 async function adminApproveTeacher(uid, status) {
   try {
-    await updateDoc(doc(db,"users",uid), { status });
-    await addDoc(collection(db,"notifications"), {
+    await updateDoc(doc(window.db,"users",uid), { status });
+    await addDoc(collection(window.db,"notifications"), {
       userId: uid, type: status==="active"?"success":"error",
       message: status==="active" ? t("teacher_approved") : t("teacher_rejected"),
       read: false, createdAt: serverTimestamp()
     });
-    await addDoc(collection(db,"audit_logs"), { userId: currentUser.uid, action: `TEACHER_${status.toUpperCase()}`, target: `User:${uid}`, timestamp: serverTimestamp() });
+    await addDoc(collection(window.db,"audit_logs"), { userId: currentUser.uid, action: `TEACHER_${status.toUpperCase()}`, target: `User:${uid}`, timestamp: serverTimestamp() });
     showToast(status==="active" ? t("teacher_approved") : t("teacher_rejected"), "success");
     switchAdminTab("teachers");
   } catch(e) { showToast(e.message, "error"); }
 }
 
+/* ─── Admin Users ────────────────────────────────────────────── */
 async function renderAdminUsers(container) {
   const users = await fetchAllUsers();
   container.innerHTML = `
     <div class="section-header"><div class="section-title">${t("users_mgmt")}</div></div>
     <div class="table-wrap"><table class="data-table">
-      <thead><tr><th>${t("name")}</th><th>${t("email_col")}</th><th>${t("role_col")}</th><th>${t("status")}</th><th>${t("joined")}</th></tr></thead>
+      <thead><tr>
+        <th>${t("name")}</th><th>${t("email_col")}</th>
+        <th>${t("role_col")}</th><th>${t("status")}</th>
+        <th>${t("joined")}</th><th>${t("actions")}</th>
+      </tr></thead>
       <tbody>
         ${users.map(u=>`
           <tr>
@@ -1244,17 +1436,40 @@ async function renderAdminUsers(container) {
             <td><span class="badge ${u.role==="admin"?"badge-admin":u.role==="teacher"?"badge-teacher":"badge-student"}">${u.role}</span></td>
             <td><span class="badge ${u.status==="active"?"badge-active":u.status==="pending"?"badge-pending":"badge-rejected"}">${u.status}</span></td>
             <td class="text-muted text-sm">${u.createdAt?.toDate?.()?.toLocaleDateString()||""}</td>
+            <td>
+              ${u.role!=="admin"?`
+                <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.uid||u.id}','${u.name?.replace(/'/g,'')}')">🗑️ ${t("delete_user")}</button>`:"—"}
+            </td>
           </tr>`).join("")}
       </tbody>
     </table></div>`;
 }
 
+/* ─── deleteUser (window.deleteUser) ────────────────────────── */
+async function deleteUser(uid, name) {
+  const msg = currentLang==="ar"
+    ? `هل أنت متأكد من حذف "${name}" نهائياً؟ لا يمكن التراجع.`
+    : `Permanently delete "${name}"? This cannot be undone.`;
+  if (!confirm(msg)) return;
+  try {
+    await deleteDoc(doc(window.db,"users",uid));
+    await addDoc(collection(window.db,"audit_logs"), { userId: currentUser.uid, action: "USER_DELETED", target: `User:${uid}`, timestamp: serverTimestamp() });
+    showToast(currentLang==="ar"?`تم حذف "${name}" بنجاح`:`"${name}" deleted.`, "success");
+    renderCurrentPage();
+  } catch(e) { showToast(e.message, "error"); }
+}
+
+/* ─── Admin All Sessions ─────────────────────────────────────── */
 async function renderAdminSessions(container) {
   const sessions = await fetchSessions();
   container.innerHTML = `
     <div class="section-header"><div class="section-title">${t("all_sessions")}</div></div>
     <div class="table-wrap"><table class="data-table">
-      <thead><tr><th>${currentLang==="ar"?"العنوان":"Title"}</th><th>${currentLang==="ar"?"المعلم":"Teacher"}</th><th>${t("date")}</th><th>${t("category")}</th><th>${currentLang==="ar"?"المسجلون":"Enrolled"}</th><th>${t("status")}</th></tr></thead>
+      <thead><tr>
+        <th>${currentLang==="ar"?"العنوان":"Title"}</th><th>${currentLang==="ar"?"المعلم":"Teacher"}</th>
+        <th>${t("date")}</th><th>${t("category")}</th>
+        <th>${currentLang==="ar"?"المسجلون":"Enrolled"}</th><th>${t("status")}</th>
+      </tr></thead>
       <tbody>
         ${sessions.map(s=>`
           <tr>
@@ -1269,12 +1484,16 @@ async function renderAdminSessions(container) {
     </table></div>`;
 }
 
+/* ─── Admin All Bookings ─────────────────────────────────────── */
 async function renderAdminBookings(container) {
   const bookings = await fetchAllBookings();
   container.innerHTML = `
     <div class="section-header"><div class="section-title">${t("all_bookings")}</div></div>
     <div class="table-wrap"><table class="data-table">
-      <thead><tr><th>${t("student_name")}</th><th>${t("session_name")}</th><th>${t("uploaded_at")}</th><th>${t("status")}</th></tr></thead>
+      <thead><tr>
+        <th>${t("student_name")}</th><th>${t("session_name")}</th>
+        <th>${t("uploaded_at")}</th><th>${t("status")}</th>
+      </tr></thead>
       <tbody>
         ${bookings.map(b=>`
           <tr>
@@ -1287,6 +1506,278 @@ async function renderAdminBookings(container) {
     </table></div>`;
 }
 
+/* ─── Admin Payment Methods ──────────────────────────────────── */
+async function renderAdminPaymentMethods(container) {
+  const methods = await fetchPaymentMethods();
+  container.innerHTML = `
+    <div class="section-header">
+      <div class="section-title">${t("payment_methods")}</div>
+      <button class="btn btn-primary btn-sm" onclick="openPaymentMethodModal()">+ ${t("add_payment_method")}</button>
+    </div>
+    <div class="alert alert-info" style="margin-bottom:1.5rem">
+      ℹ️ ${currentLang==="ar"?"طرق الدفع ستظهر للطلاب عند الحجز. أضف معلومات التحويل البنكي وفودافون كاش وغيرها هنا.":"Payment methods are shown to students when booking. Add bank transfer, Vodafone Cash, etc."}
+    </div>
+    ${methods.length ? `
+      <div style="display:flex;flex-direction:column;gap:12px">
+        ${methods.map(m=>`
+          <div class="glass-card-light" style="padding:1rem;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:14px">
+              <span style="font-size:2rem">${m.icon||"💳"}</span>
+              <div>
+                <p class="fw-500">${m.name}</p>
+                <p class="text-muted text-sm" style="white-space:pre-line;max-width:360px">${m.details||""}</p>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <span class="badge ${m.active!==false?"badge-active":"badge-rejected"}">${m.active!==false?(currentLang==="ar"?"نشطة":"Active"):(currentLang==="ar"?"معطّلة":"Inactive")}</span>
+              <button class="btn btn-outline btn-sm" onclick="openPaymentMethodModal('${m.id}')">✏️</button>
+              <button class="btn btn-danger btn-sm" onclick="deletePaymentMethod('${m.id}')">🗑️</button>
+            </div>
+          </div>`).join("")}
+      </div>`
+    : `<p class="text-muted" style="text-align:center;padding:3rem">${t("no_data")}</p>`}
+
+    <!-- Inline Modal for Payment Method -->
+    <div id="pm-modal" style="display:none;margin-top:2rem">
+      <div class="glass-card-light" style="padding:1.5rem">
+        <p class="fw-500" style="margin-bottom:1rem;color:var(--gold)">
+          ${currentLang==="ar"?"إضافة / تعديل طريقة دفع":"Add / Edit Payment Method"}
+        </p>
+        <div id="pm-error" class="alert alert-error hidden"></div>
+        <div style="display:grid;grid-template-columns:80px 1fr 1fr;gap:.75rem;align-items:start">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">${t("method_icon")}</label>
+            <input id="pm-icon" class="form-input" value="🏦" style="font-size:1.5rem;text-align:center">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">${t("method_name")}</label>
+            <input id="pm-name" class="form-input" placeholder="${currentLang==="ar"?"مصرف الراجحي":"Al Rajhi Bank"}">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label" style="display:flex;align-items:center;gap:8px">
+              ${t("method_active")}
+              <input id="pm-active" type="checkbox" checked style="width:16px;height:16px;accent-color:var(--emerald-light)">
+            </label>
+            <p class="text-muted text-xs">${currentLang==="ar"?"تفعيل الطريقة":"Enable this method"}</p>
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:.75rem">
+          <label class="form-label">${t("method_details")}</label>
+          <textarea id="pm-details" class="form-textarea" rows="3"
+            placeholder="${currentLang==="ar"?"IBAN: SA03 8000...\nاسم الحساب: معهد القرآن":"IBAN: SA03 8000...\nAccount: Quran Institute"}"></textarea>
+        </div>
+        <input type="hidden" id="pm-editing-id">
+        <div style="display:flex;gap:8px;margin-top:1rem">
+          <button class="btn btn-primary" onclick="savePaymentMethod()">💾 ${t("save")}</button>
+          <button class="btn btn-outline" onclick="document.getElementById('pm-modal').style.display='none'">✕ ${t("cancel")}</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function openPaymentMethodModal(methodId = null) {
+  document.getElementById("pm-modal").style.display = "block";
+  document.getElementById("pm-editing-id").value = methodId || "";
+  if (methodId) {
+    const snap = await getDoc(doc(window.db,"payment_methods",methodId));
+    if (snap.exists()) {
+      const m = snap.data();
+      document.getElementById("pm-icon").value    = m.icon||"💳";
+      document.getElementById("pm-name").value    = m.name||"";
+      document.getElementById("pm-details").value = m.details||"";
+      document.getElementById("pm-active").checked = m.active!==false;
+    }
+  } else {
+    document.getElementById("pm-icon").value    = "🏦";
+    document.getElementById("pm-name").value    = "";
+    document.getElementById("pm-details").value = "";
+    document.getElementById("pm-active").checked = true;
+  }
+}
+
+async function savePaymentMethod() {
+  const icon    = document.getElementById("pm-icon").value.trim();
+  const name    = document.getElementById("pm-name").value.trim();
+  const details = document.getElementById("pm-details").value.trim();
+  const active  = document.getElementById("pm-active").checked;
+  const editId  = document.getElementById("pm-editing-id").value;
+
+  if (!name) { showToast(currentLang==="ar"?"يرجى إدخال اسم الطريقة":"Please enter a method name.", "error"); return; }
+
+  try {
+    const data = { icon, name, details, active, updatedAt: serverTimestamp() };
+    if (editId) {
+      await updateDoc(doc(window.db,"payment_methods",editId), data);
+    } else {
+      data.createdAt = serverTimestamp();
+      await addDoc(collection(window.db,"payment_methods"), data);
+    }
+    await addDoc(collection(window.db,"audit_logs"), { userId: currentUser.uid, action: editId?"PAYMENT_METHOD_UPDATED":"PAYMENT_METHOD_CREATED", target: name, timestamp: serverTimestamp() });
+    showToast(t("payment_method_saved"), "success");
+    switchAdminTab("paymentmethods");
+  } catch(e) { showToast(e.message, "error"); }
+}
+
+async function deletePaymentMethod(methodId) {
+  if (!confirm(currentLang==="ar"?"هل تريد حذف طريقة الدفع هذه؟":"Delete this payment method?")) return;
+  try {
+    await deleteDoc(doc(window.db,"payment_methods",methodId));
+    await addDoc(collection(window.db,"audit_logs"), { userId: currentUser.uid, action: "PAYMENT_METHOD_DELETED", target: `Method:${methodId}`, timestamp: serverTimestamp() });
+    showToast(t("payment_method_deleted"), "success");
+    switchAdminTab("paymentmethods");
+  } catch(e) { showToast(e.message, "error"); }
+}
+
+/* ─── Admin Offers & Coupons ─────────────────────────────────── */
+async function renderAdminOffers(container) {
+  const offers = await fetchOffers();
+  container.innerHTML = `
+    <div class="section-header">
+      <div class="section-title">${t("offers_coupons")}</div>
+      <button class="btn btn-primary btn-sm" onclick="openOfferModal()">+ ${t("create_offer")}</button>
+    </div>
+    ${offers.length ? `
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-bottom:2rem">
+        ${offers.map(o=>{
+          const isExpired = o.expiryDate && new Date(o.expiryDate) < new Date();
+          return `<div class="glass-card-light" style="padding:1.25rem;border:1px solid ${isExpired?"rgba(220,38,38,.3)":"var(--border)"}">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+              <div>
+                <p class="fw-500" style="color:var(--gold-light)">${o.title||""}</p>
+                <code style="font-size:13px;background:rgba(9,30,18,.6);padding:2px 8px;border-radius:4px;color:var(--emerald-light);letter-spacing:.08em">${o.code||""}</code>
+              </div>
+              <span class="badge ${isExpired?"badge-rejected":o.active!==false?"badge-active":"badge-pending"}">
+                ${isExpired?(currentLang==="ar"?"منتهية":"Expired"):o.active!==false?(currentLang==="ar"?"نشطة":"Active"):(currentLang==="ar"?"معطّلة":"Inactive")}
+              </span>
+            </div>
+            <div style="font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:4px">
+              <span>💰 ${o.type==="percent"?o.value+"%":t("price_label")+" "+o.value} ${currentLang==="ar"?"خصم":"off"}</span>
+              ${o.expiryDate?`<span>📅 ${currentLang==="ar"?"ينتهي":"Expires"}: ${new Date(o.expiryDate).toLocaleDateString()}</span>`:""}
+              ${o.maxUses?`<span>🔢 ${currentLang==="ar"?"الحد الأقصى":"Max uses"}: ${o.maxUses}</span>`:""}
+              ${o.usedCount?`<span>✅ ${currentLang==="ar"?"استُخدم":"Used"}: ${o.usedCount}</span>`:""}
+            </div>
+            <div style="display:flex;gap:6px;margin-top:12px">
+              <button class="btn btn-outline btn-sm" style="flex:1" onclick="openOfferModal('${o.id}')">✏️ ${t("edit_session")}</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteOffer('${o.id}')">🗑️</button>
+            </div>
+          </div>`;
+        }).join("")}
+      </div>` : `<p class="text-muted" style="text-align:center;padding:2rem">${t("no_data")}</p>`}
+
+    <!-- Inline Offer Form -->
+    <div id="offer-modal" style="display:none">
+      <div class="glass-card-light" style="padding:1.5rem">
+        <p class="fw-500" id="offer-modal-title" style="margin-bottom:1rem;color:var(--gold)">${t("create_offer")}</p>
+        <div id="offer-error" class="alert alert-error hidden"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem 1rem">
+          <div class="form-group"><label class="form-label">${t("offer_title")} *</label>
+            <input id="of-title" class="form-input" placeholder="${currentLang==="ar"?"عرض رمضان المبارك":"Ramadan Special Offer"}"></div>
+          <div class="form-group"><label class="form-label">${t("offer_code")} *</label>
+            <input id="of-code" class="form-input" placeholder="RAMADAN25" style="text-transform:uppercase"
+              oninput="this.value=this.value.toUpperCase()"></div>
+          <div class="form-group"><label class="form-label">${t("offer_type")}</label>
+            <select id="of-type" class="form-select" onchange="updateOfferTypeLabel()">
+              <option value="percent">${t("offer_percent")}</option>
+              <option value="fixed">${t("offer_fixed")}</option>
+            </select></div>
+          <div class="form-group"><label class="form-label" id="of-value-label">${t("offer_discount")}</label>
+            <input id="of-value" type="number" class="form-input" placeholder="10" min="0"></div>
+          <div class="form-group"><label class="form-label">${t("offer_expiry")}</label>
+            <input id="of-expiry" type="date" class="form-input"></div>
+          <div class="form-group"><label class="form-label">${t("offer_maxuses")}</label>
+            <input id="of-maxuses" type="number" class="form-input" placeholder="${currentLang==="ar"?"غير محدود":"Unlimited"}"></div>
+          <div class="form-group" style="grid-column:1/-1"><label class="form-label">${currentLang==="ar"?"وصف العرض":"Offer Description"}</label>
+            <textarea id="of-desc" class="form-textarea" rows="2"></textarea></div>
+        </div>
+        <input type="hidden" id="of-editing-id">
+        <div style="display:flex;gap:8px;margin-top:1rem">
+          <button class="btn btn-primary" onclick="createOffer()">🎁 ${t("save")}</button>
+          <button class="btn btn-outline" onclick="document.getElementById('offer-modal').style.display='none'">✕ ${t("cancel")}</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function updateOfferTypeLabel() {
+  const type = document.getElementById("of-type")?.value;
+  const label = document.getElementById("of-value-label");
+  if (label) label.textContent = type==="percent" ? t("offer_discount") : t("offer_value") + " (" + t("price_label") + ")";
+}
+
+async function openOfferModal(offerId = null) {
+  document.getElementById("offer-modal").style.display = "block";
+  document.getElementById("of-editing-id").value = offerId || "";
+  document.getElementById("offer-modal-title").textContent = offerId ? (currentLang==="ar"?"تعديل العرض":"Edit Offer") : t("create_offer");
+  if (offerId) {
+    const snap = await getDoc(doc(window.db,"offers",offerId));
+    if (snap.exists()) {
+      const o = snap.data();
+      document.getElementById("of-title").value   = o.title||"";
+      document.getElementById("of-code").value    = o.code||"";
+      document.getElementById("of-type").value    = o.type||"percent";
+      document.getElementById("of-value").value   = o.value||"";
+      document.getElementById("of-expiry").value  = o.expiryDate||"";
+      document.getElementById("of-maxuses").value = o.maxUses||"";
+      document.getElementById("of-desc").value    = o.description||"";
+      updateOfferTypeLabel();
+    }
+  } else {
+    ["of-title","of-code","of-value","of-expiry","of-maxuses","of-desc"].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = "";
+    });
+    document.getElementById("of-type").value = "percent";
+  }
+  document.getElementById("offer-modal").scrollIntoView({ behavior:"smooth", block:"start" });
+}
+
+async function createOffer() {
+  const title   = document.getElementById("of-title")?.value?.trim();
+  const code    = document.getElementById("of-code")?.value?.trim().toUpperCase();
+  const type    = document.getElementById("of-type")?.value;
+  const value   = parseFloat(document.getElementById("of-value")?.value)||0;
+  const expiry  = document.getElementById("of-expiry")?.value;
+  const maxUses = parseInt(document.getElementById("of-maxuses")?.value)||null;
+  const desc    = document.getElementById("of-desc")?.value?.trim();
+  const editId  = document.getElementById("of-editing-id")?.value;
+
+  if (!title || !code || !value) {
+    showToast(currentLang==="ar"?"يرجى ملء الحقول الإلزامية":"Please fill required fields.", "error"); return;
+  }
+
+  try {
+    const data = {
+      title, code, type, value,
+      expiryDate: expiry || null,
+      maxUses: maxUses || null,
+      description: desc,
+      active: true,
+      usedCount: 0,
+      updatedAt: serverTimestamp()
+    };
+    if (editId) {
+      await updateDoc(doc(window.db,"offers",editId), data);
+    } else {
+      data.createdAt = serverTimestamp();
+      data.createdBy = currentUser.uid;
+      await addDoc(collection(window.db,"offers"), data);
+    }
+    await addDoc(collection(window.db,"audit_logs"), { userId: currentUser.uid, action: editId?"OFFER_UPDATED":"OFFER_CREATED", target: code, timestamp: serverTimestamp() });
+    showToast(t("offer_created"), "success");
+    switchAdminTab("offers");
+  } catch(e) { showToast(e.message, "error"); }
+}
+
+async function deleteOffer(offerId) {
+  if (!confirm(currentLang==="ar"?"هل تريد حذف هذا العرض؟":"Delete this offer?")) return;
+  try {
+    await deleteDoc(doc(window.db,"offers",offerId));
+    await addDoc(collection(window.db,"audit_logs"), { userId: currentUser.uid, action: "OFFER_DELETED", target: `Offer:${offerId}`, timestamp: serverTimestamp() });
+    showToast(t("offer_deleted"), "success");
+    switchAdminTab("offers");
+  } catch(e) { showToast(e.message, "error"); }
+}
+
+/* ─── Admin Reports ──────────────────────────────────────────── */
 async function renderAdminReports(container) {
   const [users, sessions, bookings] = await Promise.all([fetchAllUsers(), fetchSessions(), fetchAllBookings()]);
   const catCount = {};
@@ -1317,8 +1808,9 @@ async function renderAdminReports(container) {
     </div>`;
 }
 
+/* ─── Admin Audit ────────────────────────────────────────────── */
 async function renderAdminAudit(container) {
-  const snap = await getDocs(query(collection(db,"audit_logs"), orderBy("timestamp","desc")));
+  const snap = await getDocs(query(collection(window.db,"audit_logs"), orderBy("timestamp","desc")));
   const logs = snap.docs.map(d => ({ id:d.id, ...d.data() }));
   container.innerHTML = `
     <div class="section-header"><div class="section-title">${t("audit_log")}</div></div>
@@ -1341,10 +1833,9 @@ async function renderAdminAudit(container) {
    NOTIFICATIONS
    ═══════════════════════════════════════════════════════════════ */
 async function renderNotifications(container, uid) {
-  const snap = await getDocs(query(collection(db,"notifications"), where("userId","==",uid), orderBy("createdAt","desc")));
+  const snap = await getDocs(query(collection(window.db,"notifications"), where("userId","==",uid), orderBy("createdAt","desc")));
   const notifs = snap.docs.map(d => ({ id:d.id, ...d.data() }));
-  // Mark as read
-  notifs.forEach(async n => { if (!n.read) await updateDoc(doc(db,"notifications",n.id), { read: true }); });
+  notifs.forEach(async n => { if (!n.read) await updateDoc(doc(window.db,"notifications",n.id), { read: true }); });
   const icons = { success:"✅", error:"❌", info:"ℹ️", warning:"⚠️" };
   container.innerHTML = `
     <div class="section-header"><div class="section-title">${t("notifications")}</div></div>
@@ -1366,7 +1857,7 @@ async function renderNotifications(container, uid) {
    ═══════════════════════════════════════════════════════════════ */
 function buildDashLayout(role, navSections, activeTab) {
   const roleLabel = { admin:`👑 ${t("admin")}`, teacher:`📚 ${t("teacher")}`, student:`🎓 ${t("student")}` }[role];
-  const switchFn = { admin:"switchAdminTab", teacher:"switchTeacherTab", student:"switchStudentTab" }[role];
+  const switchFn  = { admin:"switchAdminTab", teacher:"switchTeacherTab", student:"switchStudentTab" }[role];
 
   const navHTML = navSections.map(sec => `
     <div class="nav-section-label">${sec.section}</div>
@@ -1426,9 +1917,9 @@ function buildDashLayout(role, navSections, activeTab) {
 
 function goToNotifications() {
   if (!userProfile) return;
-  if (userProfile.role==="admin") switchAdminTab("notifications");
+  if (userProfile.role==="admin")        switchAdminTab("notifications");
   else if (userProfile.role==="teacher") switchTeacherTab("notifications");
-  else switchStudentTab("notifications");
+  else                                   switchStudentTab("notifications");
 }
 
 function switchStudentTab(tab) { studentTab = tab; renderStudentDash(); }
@@ -1442,9 +1933,9 @@ function toggleSidebar() {
 /* ═══════════════════════════════════════════════════════════════
    MODAL HELPERS
    ═══════════════════════════════════════════════════════════════ */
-function showModal(id) { document.getElementById(id)?.classList.remove("modal-overlay"); document.getElementById(id).style.display = "flex"; }
+function showModal(id) { const el = document.getElementById(id); if(el) el.style.display = "flex"; }
 function closeModal(id) { const el = document.getElementById(id); if(el) el.style.display = "none"; }
-// Click outside closes
+
 document.addEventListener("click", e => {
   if (e.target.classList.contains("modal-overlay")) {
     e.target.style.display = "none";
@@ -1461,14 +1952,24 @@ Object.assign(window, {
   handleJoinSession, openSessionModal, saveSession,
   adminApprovePayment, adminApproveTeacher,
   switchStudentTab, switchTeacherTab, switchAdminTab,
-  goToNotifications, toggleSidebar, closeModal
+  goToNotifications, toggleSidebar, closeModal,
+  // New admin functions
+  deleteUser,
+  approvePayment,
+  manualActivateSub,
+  openPaymentMethodModal,
+  savePaymentMethod,
+  deletePaymentMethod,
+  openOfferModal,
+  createOffer,
+  deleteOffer,
+  updateOfferTypeLabel,
 });
 
 /* ═══════════════════════════════════════════════════════════════
    INIT
    ═══════════════════════════════════════════════════════════════ */
 function init() {
-  // Apply saved language
   document.body.classList.toggle("lang-ar", currentLang === "ar");
   document.documentElement.lang = currentLang;
   document.documentElement.dir  = currentLang === "ar" ? "rtl" : "ltr";
