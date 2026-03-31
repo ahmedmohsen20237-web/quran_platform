@@ -93,6 +93,9 @@ const T = {
     price: "Price (SAR)", description: "Description",
     create_session: "+ New Session", edit_session: "Edit",
     save: "Save", update: "Update",
+    delete_user: "Delete User",
+    delete_confirm: "Are you sure you want to delete this user? This action cannot be undone.",
+    user_deleted: "User deleted successfully.",
     // Messages
     booked_success: "Session booked! Please upload your payment receipt.",
     upload_success: "Receipt submitted. Waiting for admin review.",
@@ -161,6 +164,9 @@ const T = {
     price: "السعر (ر.س)", description: "الوصف",
     create_session: "+ جلسة جديدة", edit_session: "تعديل",
     save: "حفظ", update: "تحديث",
+    delete_user: "حذف المستخدم",
+    delete_confirm: "هل أنت متأكد من حذف هذا المستخدم؟ لا يمكن التراجع عن هذا الإجراء.",
+    user_deleted: "تم حذف المستخدم بنجاح.",
     booked_success: "تم الحجز! يرجى رفع إيصال الدفع.",
     upload_success: "تم إرسال الإيصال. في انتظار مراجعة المدير.",
     approved_msg: "✅ تمت الموافقة على الدفع. يمكنك الآن دخول الحلقة.",
@@ -936,14 +942,16 @@ async function renderTeacherStudents(container, sessions, bookings) {
   container.innerHTML = `
     <div class="section-header"><div class="section-title">${t("students")}</div></div>
     <div class="table-wrap"><table class="data-table">
-      <thead><tr><th>${t("student_name")}</th><th>${t("session_name")}</th><th>${t("uploaded_at")}</th><th>${t("status")}</th></tr></thead>
+      <thead><tr><th>${t("student_name")}</th><th>${t("session_name")}</th><th>${t("uploaded_at")}</th><th>${t("status")}</th> </thead>
       <tbody>
         ${bookings.length ? bookings.map(b => {
           const s = sessions.find(ss=>ss.id===b.sessionId);
-          return `<tr><td><p class="fw-500">${b.studentName||""}</p></td>
+          return `<tr>
+            <td><p class="fw-500">${b.studentName||""}</p></td>
             <td class="text-muted">${s?.title||""}</td>
             <td class="text-muted text-sm">${b.bookedAt?.toDate?.()?.toLocaleDateString()||""}</td>
-            <td><span class="badge ${b.paymentStatus==="approved"?"badge-active":b.paymentStatus==="rejected"?"badge-rejected":"badge-pending"}">${b.paymentStatus||"pending"}</span></td></tr>`;
+            <td><span class="badge ${b.paymentStatus==="approved"?"badge-active":b.paymentStatus==="rejected"?"badge-rejected":"badge-pending"}">${b.paymentStatus||"pending"}</span></td>
+          </tr>`;
         }).join("") : `<tr><td colspan="4" style="text-align:center;padding:2rem;color:rgba(201,168,76,.4)">${t("no_data")}</td></tr>`}
       </tbody>
     </table></div>`;
@@ -1138,17 +1146,20 @@ async function renderAdminPayments(container) {
   const bookings = await fetchAllBookings();
   const withReceipts = bookings.filter(b => b.receiptUrl || b.paymentStatus === "receipt_uploaded" || b.paymentStatus === "approved" || b.paymentStatus === "rejected");
   container.innerHTML = `
-    <div class="section-header"><div class="section-title">${t("payments")}</div></div>
+    <div class="section-header">
+      <div class="section-title">${t("payments")}</div>
+      <button class="btn btn-primary btn-sm" onclick="activateSubscriptionPayments()">💳 Activate Subscriptions</button>
+    </div>
     <div class="table-wrap"><table class="data-table">
-      <thead><tr>
+      <thead>
         <th>${t("student_name")}</th><th>${t("session_name")}</th>
         <th>${t("amount_paid")}</th><th>${t("view_receipt")}</th>
         <th>${t("uploaded_at")}</th><th>${t("status")}</th><th>${t("actions")}</th>
-      </tr></thead>
+      </thead>
       <tbody>
         ${withReceipts.length ? withReceipts.map(b=>`
-          <tr>
-            <td><p class="fw-500">${b.studentName||""}</p></td>
+           <tr>
+             <td><p class="fw-500">${b.studentName||""}</p></td>
             <td class="text-muted">${b.sessionTitle||""}</td>
             <td class="fw-600" style="color:var(--gold)">${t("price_label")} ${b.amountPaid||0}</td>
             <td>${b.receiptUrl?`<a href="${b.receiptUrl}" target="_blank" class="btn btn-outline btn-sm">🖼️ ${t("view_receipt")}</a>`:"-"}</td>
@@ -1165,6 +1176,11 @@ async function renderAdminPayments(container) {
         : `<tr><td colspan="7" style="text-align:center;padding:2rem;color:rgba(201,168,76,.4)">${t("no_data")}</td></tr>`}
       </tbody>
     </table></div>`;
+}
+
+// Function to activate subscription payments (placeholder for subscription feature)
+function activateSubscriptionPayments() {
+  showToast(currentLang === "ar" ? "سيتم تفعيل الاشتراكات قريباً" : "Subscription payments feature coming soon", "info");
 }
 
 async function adminApprovePayment(bookingId, decision) {
@@ -1186,40 +1202,42 @@ async function adminApprovePayment(bookingId, decision) {
     showToast(decision==="approved" ? t("approved_msg") : t("rejected_msg"), decision==="approved"?"success":"info");
     switchAdminTab("payments");
   } catch(e) { showToast(e.message, "error"); }
+}
+
 async function renderAdminTeachers(container) {
   const teachers = await fetchAllUsers("teacher");
   container.innerHTML = `
     <div class="section-header"><div class="section-title">${t("teacher_approvals")}</div></div>
     <div class="table-wrap"><table class="data-table">
-      <thead><tr><th>${t("name")}</th><th>${t("email_col")}</th><th>${t("joined")}</th><th>${t("status")}</th><th>${t("actions")}</th></tr></thead>
+      <thead>
+        <th>${t("name")}</th>
+        <th>${t("email_col")}</th>
+        <th>${t("joined")}</th>
+        <th>${t("status")}</th>
+        <th>${t("actions")}</th>
+      </thead>
       <tbody>
-        ${teachers.length ? teachers.map(u => {
-          let buttons = '';
-          // زر الموافقة والرفض يظهر فقط للمعلقين
-          if (u.status === "pending") {
-            buttons += `
-              <button class="btn btn-primary btn-sm" onclick="adminApproveTeacher('${u.uid || u.id}','active')">${t("approve")}</button>
-              <button class="btn btn-danger btn-sm" onclick="adminApproveTeacher('${u.uid || u.id}','rejected')">${t("reject")}</button>
-            `;
-          }
-          // زر الحذف يظهر دائماً لجميع المعلمين
-          buttons += `
-            <button class="btn btn-danger btn-sm" style="background:#ff4d4d; margin-right:5px;" onclick="deleteUser('${u.uid || u.id}')">حذف نهائي</button>
-          `;
-
-          return `
+        ${teachers.length ? teachers.map(u=>`
           <tr>
             <td class="fw-500">${u.name}</td>
             <td class="text-muted text-sm">${u.email}</td>
-            <td class="text-muted text-sm">${u.createdAt?.toDate?.()?.toLocaleDateString() || ""}</td>
-            <td><span class="badge ${u.status === "active" ? "badge-active" : u.status === "pending" ? "badge-pending" : "badge-rejected"}">${u.status}</span></td>
-            <td><div style="display:flex; gap:6px; flex-wrap:wrap;">${buttons}</div></td>
-          </tr>`;
-        }).join("")
-        : `<tr><td colspan="5" style="text-align:center; padding:2rem;">${t("no_data")}</td></tr>`}
+            <td class="text-muted text-sm">${u.createdAt?.toDate?.()?.toLocaleDateString()||""}</td>
+            <td><span class="badge ${u.status==="active"?"badge-active":u.status==="pending"?"badge-pending":"badge-rejected"}">${u.status}</span></td>
+            <td>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                ${u.status === "pending" ? `
+                  <button class="btn btn-primary btn-sm" onclick="adminApproveTeacher('${u.uid||u.id}','active')">${t("approve")}</button>
+                  <button class="btn btn-danger btn-sm" onclick="adminApproveTeacher('${u.uid||u.id}','rejected')">${t("reject")}</button>
+                ` : ""}
+                <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.uid||u.id}')">🗑️ ${t("delete_user")}</button>
+              </div>
+            </td>
+          </tr>`).join("")
+        : `<tr><td colspan="5" style="text-align:center;padding:2rem;color:rgba(201,168,76,.4)">${t("no_data")}</td></tr>`}
       </tbody>
     </table></div>`;
 }
+
 async function adminApproveTeacher(uid, status) {
   try {
     await updateDoc(doc(db,"users",uid), { status });
@@ -1234,12 +1252,52 @@ async function adminApproveTeacher(uid, status) {
   } catch(e) { showToast(e.message, "error"); }
 }
 
+// Delete user function
+async function deleteUser(userId) {
+  if (!currentUser || userProfile?.role !== "admin") {
+    showToast("Unauthorized action", "error");
+    return;
+  }
+  
+  const confirmDelete = confirm(t("delete_confirm"));
+  if (!confirmDelete) return;
+  
+  try {
+    // Delete user from Firestore
+    await deleteDoc(doc(db, "users", userId));
+    
+    // Log the action
+    await addDoc(collection(db, "audit_logs"), {
+      userId: currentUser.uid,
+      action: "USER_DELETED",
+      target: `User:${userId}`,
+      timestamp: serverTimestamp()
+    });
+    
+    showToast(t("user_deleted"), "success");
+    // Refresh the admin teachers tab
+    switchAdminTab("teachers");
+  } catch(e) {
+    console.error("Error deleting user:", e);
+    showToast(e.message || "Error deleting user", "error");
+  }
+}
+
 async function renderAdminUsers(container) {
   const users = await fetchAllUsers();
   container.innerHTML = `
-    <div class="section-header"><div class="section-title">${t("users_mgmt")}</div></div>
+    <div class="section-header">
+      <div class="section-title">${t("users_mgmt")}</div>
+    </div>
     <div class="table-wrap"><table class="data-table">
-      <thead><tr><th>${t("name")}</th><th>${t("email_col")}</th><th>${t("role_col")}</th><th>${t("status")}</th><th>${t("joined")}</th></tr></thead>
+      <thead>
+        <th>${t("name")}</th>
+        <th>${t("email_col")}</th>
+        <th>${t("role_col")}</th>
+        <th>${t("status")}</th>
+        <th>${t("joined")}</th>
+        <th>${t("actions")}</th>
+      </thead>
       <tbody>
         ${users.map(u=>`
           <tr>
@@ -1250,6 +1308,11 @@ async function renderAdminUsers(container) {
             <td><span class="badge ${u.role==="admin"?"badge-admin":u.role==="teacher"?"badge-teacher":"badge-student"}">${u.role}</span></td>
             <td><span class="badge ${u.status==="active"?"badge-active":u.status==="pending"?"badge-pending":"badge-rejected"}">${u.status}</span></td>
             <td class="text-muted text-sm">${u.createdAt?.toDate?.()?.toLocaleDateString()||""}</td>
+            <td>
+              ${u.uid !== currentUser?.uid ? `
+                <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.uid||u.id}')">🗑️ ${t("delete_user")}</button>
+              ` : "<span class=\"text-muted text-sm\">Current</span>"}
+            </td>
           </tr>`).join("")}
       </tbody>
     </table></div>`;
@@ -1260,7 +1323,14 @@ async function renderAdminSessions(container) {
   container.innerHTML = `
     <div class="section-header"><div class="section-title">${t("all_sessions")}</div></div>
     <div class="table-wrap"><table class="data-table">
-      <thead><tr><th>${currentLang==="ar"?"العنوان":"Title"}</th><th>${currentLang==="ar"?"المعلم":"Teacher"}</th><th>${t("date")}</th><th>${t("category")}</th><th>${currentLang==="ar"?"المسجلون":"Enrolled"}</th><th>${t("status")}</th></tr></thead>
+      <thead>
+        <th>${currentLang==="ar"?"العنوان":"Title"}</th>
+        <th>${currentLang==="ar"?"المعلم":"Teacher"}</th>
+        <th>${t("date")}</th>
+        <th>${t("category")}</th>
+        <th>${currentLang==="ar"?"المسجلون":"Enrolled"}</th>
+        <th>${t("status")}</th>
+      </thead>
       <tbody>
         ${sessions.map(s=>`
           <tr>
@@ -1280,7 +1350,12 @@ async function renderAdminBookings(container) {
   container.innerHTML = `
     <div class="section-header"><div class="section-title">${t("all_bookings")}</div></div>
     <div class="table-wrap"><table class="data-table">
-      <thead><tr><th>${t("student_name")}</th><th>${t("session_name")}</th><th>${t("uploaded_at")}</th><th>${t("status")}</th></tr></thead>
+      <thead>
+        <th>${t("student_name")}</th>
+        <th>${t("session_name")}</th>
+        <th>${t("uploaded_at")}</th>
+        <th>${t("status")}</th>
+      </thead>
       <tbody>
         ${bookings.map(b=>`
           <tr>
@@ -1329,7 +1404,12 @@ async function renderAdminAudit(container) {
   container.innerHTML = `
     <div class="section-header"><div class="section-title">${t("audit_log")}</div></div>
     <div class="table-wrap"><table class="data-table">
-      <thead><tr><th>${currentLang==="ar"?"الإجراء":"Action"}</th><th>${currentLang==="ar"?"الهدف":"Target"}</th><th>${currentLang==="ar"?"المستخدم":"User"}</th><th>${currentLang==="ar"?"التوقيت":"Timestamp"}</th></tr></thead>
+      <thead>
+        <th>${currentLang==="ar"?"الإجراء":"Action"}</th>
+        <th>${currentLang==="ar"?"الهدف":"Target"}</th>
+        <th>${currentLang==="ar"?"المستخدم":"User"}</th>
+        <th>${currentLang==="ar"?"التوقيت":"Timestamp"}</th>
+      </thead>
       <tbody>
         ${logs.length ? logs.slice(0,50).map(l=>`
           <tr>
@@ -1465,7 +1545,7 @@ Object.assign(window, {
   quickLogin, onRoleChange, openBookModal, confirmBooking,
   openUploadModal, submitPayment, onDragOver, onDragLeave, onDrop, onFileSelect,
   handleJoinSession, openSessionModal, saveSession,
-  adminApprovePayment, adminApproveTeacher,
+  adminApprovePayment, adminApproveTeacher, deleteUser, activateSubscriptionPayments,
   switchStudentTab, switchTeacherTab, switchAdminTab,
   goToNotifications, toggleSidebar, closeModal
 });
@@ -1482,46 +1562,4 @@ function init() {
   navigate("home");
 }
 
-// --- كود الإدارة المصلح بالكامل ---
-
-async function renderAdminTeachers(container) {
-  const teachers = await fetchAllUsers("teacher");
-  container.innerHTML = `
-    <div class="section-header"><div class="section-title">${t("teacher_approvals")}</div></div>
-    <div class="table-wrap"><table class="data-table">
-      <thead><tr><th>${t("name")}</th><th>${t("email_col")}</th><th>${t("joined")}</th><th>${t("status")}</th><th>${t("actions")}</th></tr></thead>
-      <tbody>
-        ${teachers.length ? teachers.map(u => `
-          <tr>
-            <td class="fw-500">${u.name}</td>
-            <td class="text-muted text-sm">${u.email}</td>
-            <td class="text-muted text-sm">${u.createdAt?.toDate?.()?.toLocaleDateString() || ""}</td>
-            <td><span class="badge ${u.status === "active" ? "badge-active" : u.status === "pending" ? "badge-pending" : "badge-rejected"}">${u.status}</span></td>
-            <td>
-              <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                ${u.status === "pending" ? `
-                  <button class="btn btn-primary btn-sm" onclick="adminApproveTeacher('${u.uid || u.id}','active')">${t("approve")}</button>
-                  <button class="btn btn-danger btn-sm" onclick="adminApproveTeacher('${u.uid || u.id}','rejected')">${t("reject")}</button>
-                ` : ""}
-                <button class="btn btn-danger btn-sm" style="background:#ff4d4d; border:none; color:white; padding:4px 8px; border-radius:4px; cursor:pointer;" onclick="deleteUser('${u.uid || u.id}')">حذف نهائي</button>
-              </div>
-            </td>
-          </tr>`).join("")
-        : `<tr><td colspan="5" style="text-align:center; padding:2rem;">${t("no_data")}</td></tr>`}
-      </tbody>
-    </table></div>`;
-}
-
-// دالة الحذف (تأكد أنها في سطر جديد ومستقل)
-window.deleteUser = async function(uid) {
-    if (confirm("هل أنت متأكد من حذف هذا الحساب نهائياً؟")) {
-        try {
-            const { doc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
-            await deleteDoc(doc(window.db, "users", uid));
-            alert("تم الحذف بنجاح");
-            location.reload(); 
-        } catch (e) {
-            alert("خطأ: " + e.message);
-        }
-    }
-};
+init();
